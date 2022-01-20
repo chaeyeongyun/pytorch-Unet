@@ -1,7 +1,10 @@
 import glob
 import os
 import PIL
+import numpy as np
+import torch
 from torch.utils.data import Dataset
+import torch.nn.functional as F
 import torchvision.transforms as transforms
 
 class CustomImageDataset(Dataset):
@@ -13,6 +16,15 @@ class CustomImageDataset(Dataset):
         self.images = [img.split('/')[-1] for img in self.images]
         self.transform = transform
         self.target_transform = target_transform
+
+    def mask_preprocessing(self, mask, num_classes=3):
+        mask = np.array(mask)
+        # mask = torch.from_numpy(mask*2//255)
+        # mask_oh = F.one_hot()
+        mask = np.eye(num_classes)[mask]
+        # mask_tp = torch.transpose(mask_oh) # (class 3+1개일때 여기서 (1, 3, 4, 3) shape라서 4shape인데에 순서대로 묶어야함)
+
+
 
     def __len__(self):
         return len(self.images)
