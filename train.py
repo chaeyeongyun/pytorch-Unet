@@ -1,6 +1,7 @@
 import os
 import logging
 import argparse
+import time
 from model import Unet
 from dataloader import CustomImageDataset
 import torch
@@ -19,8 +20,9 @@ def train(opt):
     model = Unet().to(device)
 
     # data load
-    training_data = CustomImageDataset(os.path.join(dataset_path, 'train_images'), os.path.join(dataset_path, 'train_masks'))
-    val_data = CustomImageDataset(os.path.join(dataset_path, 'val_images'), os.path.join(dataset_path, 'val_masks'))
+    data_transform = transforms.Compose([transforms.Resize((572, 572))])
+    training_data = CustomImageDataset(os.path.join(dataset_path, 'train_images'), os.path.join(dataset_path, 'train_masks'), transform=data_transform, target_transform=data_transform)
+    val_data = CustomImageDataset(os.path.join(dataset_path, 'val_images'), os.path.join(dataset_path, 'val_masks'), transform=data_transform, target_transform=data_transform)
     trainloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
     valloader = DataLoader(val_data, batch_size=1, shuffle=True)
 
@@ -38,19 +40,27 @@ def train(opt):
     ''')
 
     for epoch in range(start_epoch, num_epochs):
-
+        model.train()
+        train_acc = 0
+        train_loss = 0
 
         for x_batch, y_batch in trainloader:
+            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             optimizer.zero_grad()
             pred = model(x_batch)
-            loss = nn.CrossEntropyLoss(weight=, )
+            y_batch = torch.resize() # flatten -> (N, HxW, 3)
+            print(y_batch)
+            print(y_batch.shape)
+            time.sleep(100)
+            loss = nn.CrossEntropyLoss()
 
-        lr_scheduler.step(test_loss)
+
+        # lr_scheduler.step(test_loss)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_epochs', type=int, default=25, help='the number of epochs')
-    parser.add_argument('--batch_size', type=int, default=8, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--init_lr', type=int, default=8, help='initial learning rate')
     parser.add_argument('--dataset_path', type=str, default='../cropweed/rice_s_n_w', help='dataset directory path')
     parser.add_argument('--start_epoch', type=int, default=0, help='the start number of epochs')
