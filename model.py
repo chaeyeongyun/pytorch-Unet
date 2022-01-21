@@ -98,7 +98,7 @@ class ExpansivePath(nn.Module):
         return output
 
 class Unet(nn.Module):
-    def __init__(self, in_channels=3, first_outchannels=64, num_classes=2):
+    def __init__(self, in_channels=3, first_outchannels=64, num_classes=3):
         super(Unet, self).__init__()
         self.contracting_path = ContractingPath(in_channels=in_channels, first_outchannels=first_outchannels)
         self.middle_conv = DBConv(first_outchannels*8, first_outchannels*16)
