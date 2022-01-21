@@ -6,9 +6,12 @@ def match_pred_n_mask(pred_feature, mask):
     diffX = mask.shape[3] - pred_feature.shape[3]
     return mask[:, :, diffY//2:diffY//2+pred_feature.shape[2], diffX//2:+diffX//2+pred_feature.shape[3]]
 
-def mask_labeling_n_flatten(y_batch):
+def mask_labeling_n_flatten(y_batch, num_classes):
     label_pixels = np.unique(y_batch)
     label_pixels = sorted(label_pixels)
+    if len(label_pixels) != num_classes:
+        label_pixels = np.array([0, 128, 255])
+    
     for i, px in enumerate(label_pixels):
         y_batch = np.where(y_batch==px, i, y_batch)
     

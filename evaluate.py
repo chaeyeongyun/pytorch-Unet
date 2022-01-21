@@ -11,7 +11,7 @@ def accuracy_per_pixel(pred, target):
     accuracy = torch.sum(pred == target) / (pred.shape[1] * pred.shape[0])
     return accuracy
 
-def evaluate(model, valloader, device):
+def evaluate(model, valloader, device, num_classes):
     model.eval()
     val_acc_pixel = 0
     val_loss = 0
@@ -20,7 +20,7 @@ def evaluate(model, valloader, device):
         pred = model(x_batch)
         # mask labeling and flatten
         y_batch = match_pred_n_mask(pred, y_batch)
-        y_batch = mask_labeling_n_flatten(y_batch)
+        y_batch = mask_labeling_n_flatten(y_batch, num_classes)
         
         y_batch = y_batch.to(device)
         sigmoid = nn.Sigmoid()

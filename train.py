@@ -68,7 +68,7 @@ def train(opt):
             pred = model(x_batch)
             # mask labeling and flatten
             y_batch = match_pred_n_mask(pred, y_batch)
-            y_batch = mask_labeling_n_flatten(y_batch)
+            y_batch = mask_labeling_n_flatten(y_batch, num_classes)
             
             y_batch = y_batch.to(device)
             sigmoid = nn.Sigmoid()
@@ -87,7 +87,7 @@ def train(opt):
         
         # evaluate after 1 epoch training
         torch.cuda.empty_cache()
-        val_loss, val_acc_pixel = evaluate(model, valloader, device)
+        val_loss, val_acc_pixel = evaluate(model, valloader, device, num_classes)
         if val_acc_pixel > best_val_acc:
             torch.save(model.state_dict(), os.path.join(save_model_path, f'/{num_epochs}ep_{batch_size}b_best.pt'))
             best_val_acc = val_acc_pixel
