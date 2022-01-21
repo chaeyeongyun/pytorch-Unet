@@ -51,6 +51,7 @@ def train(opt):
     dt = datetime.datetime.now()
     save_model_path = os.path.join(checkpoint_dir, f"{dt.month}-{dt.day}-{dt.hour}-{dt.minute}")
     os.makedirs(save_model_path)
+    start = time.time()
     if save_txt:
         f = open(os.path.join(save_model_path, 'result.txt'),'w')
     
@@ -119,7 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs', type=int, default=25, help='the number of epochs')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
-    parser.add_argument('--init_lr', type=float, default=0.001, help='initial learning rate')
+    parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
     parser.add_argument('--dataset_path', type=str, default='../cropweed/rice_s_n_w', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
     parser.add_argument('--start_epoch', type=int, default=0, help='the start number of epochs')
