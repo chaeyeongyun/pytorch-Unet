@@ -98,12 +98,16 @@ class ExpansivePath(nn.Module):
         return output
 
 class Unet(nn.Module):
-    def __init__(self, in_channels=3, first_outchannels=64, num_classes=3):
+    def __init__(self, in_channels=3, first_outchannels=64, num_classes=3, init_weights=True):
         super(Unet, self).__init__()
         self.contracting_path = ContractingPath(in_channels=in_channels, first_outchannels=first_outchannels)
         self.middle_conv = DBConv(first_outchannels*8, first_outchannels*16)
         self.expansive_path = ExpansivePath(in_channels=first_outchannels*16)
         self.conv_1x1 = nn.Conv2d(first_outchannels, num_classes, 1)
+        
+        if init_weights:
+            print('initialize weights...')
+            self._initialize_weights()
     
     def forward(self, x):
         pass1, pass2, pass3, pass4, output = self.contracting_path(x)
@@ -112,6 +116,17 @@ class Unet(nn.Module):
         output = self.conv_1x1(output)
 
         return output
+   
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d): 
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu') # He initialization
+                if m.bias is not None: 
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            
 
 
 if __name__ == '__main__':

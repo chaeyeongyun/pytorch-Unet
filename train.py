@@ -16,7 +16,7 @@ from torchvision import transforms
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
-def train(opt):
+def train(opt, model):
     # parameters
     num_epochs, batch_size, lr, num_classes = opt.num_epochs, opt.batch_size, opt.init_lr, opt.num_classes
     input_size = opt.input_size
@@ -34,10 +34,12 @@ def train(opt):
 
     trainloader_length = len(trainloader)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0001, amsgrad=False)
-    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=2)
+    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
     
     # start training
-    logging.info(f'''Starting training:
+    logger = logging.getLogger("start training")
+    logger.setLevel(logging.INFO)
+    logger.info(f'''Starting training:
         Epochs:          {num_epochs}
         Batch size:      {batch_size}
         Learning rate:   {lr}
@@ -90,7 +92,7 @@ def train(opt):
         torch.cuda.empty_cache()
         val_loss, val_acc_pixel = evaluate(model, valloader, device, num_classes)
         if val_acc_pixel > best_val_acc:
-            torch.save(model.state_dict(), os.path.join(save_model_path, f'/{num_epochs}ep_{batch_size}b_best.pt'))
+            torch.save(model.state_dict(), os.path.join(save_model_path, f'{epoch}_{num_epochs}ep_{batch_size}b_best.pt'))
             best_val_acc = val_acc_pixel
         train_acc_pixel = train_acc_pixel / trainloader_length
         train_loss = train_loss / trainloader_length
@@ -112,16 +114,16 @@ def train(opt):
     if save_txt:
         f.write(total_result_txt)
         f.close()
-    torch.save(model.state_dict(), os.path.join(save_model_path, f'/{num_epochs}ep_{batch_size}b_final.pt'))
+    torch.save(model.state_dict(), os.path.join(save_model_path, f'{num_epochs}ep_{batch_size}b_final.pt'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_epochs', type=int, default=25, help='the number of epochs')
+    parser.add_argument('--num_epochs', type=int, default=50, help='the number of epochs')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
-    parser.add_argument('--dataset_path', type=str, default='../cropweed/rice_s_n_w', help='dataset directory path')
+    parser.add_argument('--dataset_path', type=str, default='../cropweed/IJRR2017', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
     parser.add_argument('--start_epoch', type=int, default=0, help='the start number of epochs')
     parser.add_argument('--load_model',default=None, type=str, help='the name of saved model file (.pt)')
@@ -129,4 +131,9 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoint', help='path to save checkpoint file')
     
     opt = parser.parse_args()
-    train(opt)
+    try:
+        model = None
+        train(opt, model)
+    except:
+         print("---------!!!training interrupt!!!---------")
+         torch.save(model.state_dict(), os.path.join(opt.save_model_path, f'interrupt.pt'))
