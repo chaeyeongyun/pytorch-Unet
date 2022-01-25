@@ -5,7 +5,7 @@ import time
 import datetime
 from model import Unet
 from dataloader import CustomImageDataset
-from utils import match_pred_n_mask, mask_labeling_n_flatten
+from utils import mask_labeling
 from evaluate import accuracy_per_pixel, evaluate
 import numpy as np
 import torch
@@ -70,21 +70,25 @@ def train(opt, model):
             optimizer.zero_grad()
             # prediction
             pred = model(x_batch)
-            # mask labeling and flatten
-            y_batch = match_pred_n_mask(pred, y_batch)
-            y_batch = mask_labeling_n_flatten(y_batch, num_classes)
             
+            y_batch = mask_labeling(y_batch, num_classes)
+            y_batch = torch.reshape(y_batch, (y_batch.shape[0], -1)) # (N, 1xHxW)
+            
+            
+            y_batch = y_batch.type(torch.long)
             y_batch = y_batch.to(device)
-            sigmoid = nn.Sigmoid()
-            pred = sigmoid(pred)
+            
+            pred = torch.reshape(pred, (pred.shape[0], pred.shape[1], -1))# (N, C, HxW)
             pred = pred.type(torch.float64)
-            # prediction flatten
-            pred = torch.reshape(pred, (pred.shape[0], pred.shape[1]*pred.shape[2]*pred.shape[3]))
-            loss = nn.BCELoss()
+            pred = pred.softmax(dim=1)
+
+            loss = nn.CrossEntropyLoss(ignore_index=0)
             loss_output = loss(pred, y_batch)
             loss_output.backward()
+            
             #accuracy calculate
-            accuracy_px = accuracy_per_pixel(torch.round(pred), y_batch)
+            accuracy_px = accuracy_per_pixel(pred, y_batch)
+            
             # train loss / train accuracy
             train_acc_pixel += accuracy_px
             train_loss += loss_output.item()

@@ -1,13 +1,14 @@
-from utils import match_pred_n_mask, mask_labeling_n_flatten
+from utils import mask_labeling
 import torch
 import torch.nn as nn
 
 
 def accuracy_per_pixel(pred, target):
     '''
-    pred and target is 2-dimensional flatten Tensor: shape (N, number of featuremap's pixels)
-    both tensor have 0.0 or 1.0 value
+    pred: (N, C, HxW)
+    target : (N, HxW)
     '''
+    pred = pred.argmax(dim=1) # (N, HxW)
     accuracy = torch.sum(pred == target) / (pred.shape[1] * pred.shape[0])
     return accuracy
 
@@ -19,18 +20,19 @@ def evaluate(model, valloader, device, num_classes):
         x_batch = x_batch.to(device)
         pred = model(x_batch)
         # mask labeling and flatten
-        y_batch = match_pred_n_mask(pred, y_batch)
-        y_batch = mask_labeling_n_flatten(y_batch, num_classes)
-        
+        y_batch = mask_labeling(y_batch, num_classes)
+        y_batch = torch.reshape(y_batch, (y_batch.shape[0], -1))
+        y_batch = y_batch.type(torch.long)
         y_batch = y_batch.to(device)
-        sigmoid = nn.Sigmoid()
-        pred = sigmoid(pred)
+        
+        pred = torch.reshape(pred, (pred.shape[0], pred.shape[1], -1))# (N, C, HxW)
         pred = pred.type(torch.float64)
+        pred = pred.softmax(dim=1)
         # prediction flatten
-        pred = torch.reshape(pred, (pred.shape[0], pred.shape[1]*pred.shape[2]*pred.shape[3]))
-        loss = nn.BCELoss()
+       
+        loss = nn.CrossEntropyLoss(ignore_index=0)
         loss_output = loss(pred, y_batch).item()
-        accuracy_per_px = accuracy_per_pixel(torch.round(pred), y_batch)
+        accuracy_per_px = accuracy_per_pixel(pred, y_batch)
         # val loss / val accuracy
         val_acc_pixel += accuracy_per_px
         val_loss += loss_output

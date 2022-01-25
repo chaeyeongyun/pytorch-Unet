@@ -4,6 +4,7 @@ from PIL import Image
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 
@@ -28,8 +29,9 @@ class CustomImageDataset(Dataset):
         image = image.resize((self.resize, self.resize))
         image = tf(image)
         image *= 255
+        image = F.pad(image, (4, 4, 4, 4))
         
-        mask_path = self.mask_dir + '/' + self.images[idx]
+        mask_path = os.path.join(self.mask_dir, self.images[idx])
         mask = Image.open(mask_path).convert('L')
         mask = mask.resize((self.resize, self.resize), resample=Image.NEAREST)
         mask = tf(mask)
