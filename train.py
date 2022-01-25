@@ -19,9 +19,9 @@ from torch.utils.tensorboard import SummaryWriter
 def train(opt, model):
     # parameters
     num_epochs, batch_size, lr, num_classes = opt.num_epochs, opt.batch_size, opt.init_lr, opt.num_classes
-    input_size = opt.input_size
+    input_size, ignore_idx = opt.input_size, opt.ignore_idx
     start_epoch, load_model, dataset_path, save_txt = opt.start_epoch, opt.load_model, opt.dataset_path, opt.save_txt
-    checkpoint_dir = opt.checkpoint_dir
+    save_checkpoint, checkpoint_dir = opt.save_checkpoint, opt.checkpoint_dir, 
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = Unet(num_classes=num_classes).to(device)
@@ -36,58 +36,55 @@ def train(opt, model):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0001, amsgrad=False)
     lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
     
-    # start training
-    logger = logging.getLogger("start training")
-    logger.setLevel(logging.INFO)
-    logger.info(f'''Starting training:
-        Epochs:          {num_epochs}
-        Batch size:      {batch_size}
-        Learning rate:   {lr}
-        Training size:   {len(training_data)}
-        Validation size: {len(val_data)}
-        Device:          {device.type}
-    ''')
+    
     # for tensorboard
     writer = SummaryWriter()
     
     dt = datetime.datetime.now()
-    save_model_path = os.path.join(checkpoint_dir, f"{dt.month}-{dt.day}-{dt.hour}-{dt.minute}")
-    os.makedirs(save_model_path)
+    if save_checkpoint:
+        save_model_path = os.path.join(checkpoint_dir, f"{dt.month}-{dt.day}-{dt.hour}-{dt.minute}")
+        os.makedirs(save_model_path)
     start = time.time()
     if save_txt:
         f = open(os.path.join(save_model_path, 'result.txt'),'w')
     
     best_val_acc = 0
     start = time.time()
+    # start training
     for epoch in range(start_epoch, num_epochs):
         model.train()
         train_acc_pixel = 0
         train_loss = 0
 
+        iter = 0
         for x_batch, y_batch in trainloader:
-            x_batch = x_batch.to(device)
+            iter +=1
+            msg = '\riteration  %d / %d'%(iter, trainloader_length)
+            print(' '*len(msg), end='')
+            print(msg, end='')
+            time.sleep(0.1)
+            
+            x_batch = x_batch.to(device, dtype=torch.float32)
             # initialize optimizer
             optimizer.zero_grad()
             # prediction
-            pred = model(x_batch)
+            pred = model(x_batch) # (N, C(n_classes), H, W)
             
-            y_batch = mask_labeling(y_batch, num_classes)
-            y_batch = torch.reshape(y_batch, (y_batch.shape[0], -1)) # (N, 1xHxW)
+            y_batch = mask_labeling(y_batch, num_classes) # (N, H, W) and has [0, numclass -1] value
+            # y_batch = torch.reshape(y_batch, (y_batch.shape[0], -1)) # (N, 1xHxW)
             
+            y_batch = y_batch.to(device, dtype=torch.long)
             
-            y_batch = y_batch.type(torch.long)
-            y_batch = y_batch.to(device)
-            
-            pred = torch.reshape(pred, (pred.shape[0], pred.shape[1], -1))# (N, C, HxW)
-            pred = pred.type(torch.float64)
-            pred = pred.softmax(dim=1)
+            # pred = torch.reshape(pred, (pred.shape[0], pred.shape[1], -1))# (N, C, HxW)
+            # pred = pred.type(torch.float64)
+            # pred = pred.softmax(dim=1)
 
-            loss = nn.CrossEntropyLoss(ignore_index=0)
+            loss = nn.CrossEntropyLoss()
             loss_output = loss(pred, y_batch)
             loss_output.backward()
             
             #accuracy calculate
-            accuracy_px = accuracy_per_pixel(pred, y_batch)
+            accuracy_px = accuracy_per_pixel(pred, y_batch, ignore_idx)
             
             # train loss / train accuracy
             train_acc_pixel += accuracy_px
@@ -95,10 +92,12 @@ def train(opt, model):
         
         # evaluate after 1 epoch training
         torch.cuda.empty_cache()
-        val_loss, val_acc_pixel = evaluate(model, valloader, device, num_classes)
-        if val_acc_pixel > best_val_acc:
-            torch.save(model.state_dict(), os.path.join(save_model_path, f'{epoch}_{num_epochs}ep_{batch_size}b_best.pt'))
-            best_val_acc = val_acc_pixel
+        val_loss, val_acc_pixel = evaluate(model, valloader, device, num_classes, ignore_idx)
+        if save_checkpoint:
+            if val_acc_pixel > best_val_acc:
+                torch.save(model.state_dict(), os.path.join(save_model_path, f'{epoch}_{num_epochs}ep_{batch_size}b_best.pt'))
+                best_val_acc = val_acc_pixel
+                
         train_acc_pixel = train_acc_pixel / trainloader_length
         train_loss = train_loss / trainloader_length
         lr_scheduler.step(val_loss)
@@ -124,15 +123,17 @@ def train(opt, model):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_epochs', type=int, default=50, help='the number of epochs')
+    parser.add_argument('--num_epochs', type=int, default=25, help='the number of epochs')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
+    parser.add_argument('--ignore_idx', type=int, default=None, help='ignore index i.e. background class')
     parser.add_argument('--dataset_path', type=str, default='../cropweed/IJRR2017', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
     parser.add_argument('--start_epoch', type=int, default=0, help='the start number of epochs')
     parser.add_argument('--load_model',default=None, type=str, help='the name of saved model file (.pt)')
-    parser.add_argument('--save_txt', type=bool, default=True, help='if it''s true, the result of trainig will be saved as txt file.')
+    parser.add_argument('--save_txt', type=bool, default=False, help='if it''s true, the result of trainig will be saved as txt file.')
+    parser.add_argument('--save_checkpoint', type=bool, default=False, help='if it''s true, the model will saved at checkpoint dir')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoint', help='path to save checkpoint file')
     
     opt = parser.parse_args()

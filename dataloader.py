@@ -28,14 +28,14 @@ class CustomImageDataset(Dataset):
         image = Image.open(img_path)
         image = image.resize((self.resize, self.resize))
         image = tf(image)
-        image *= 255
+        # image *= 255
         image = F.pad(image, (4, 4, 4, 4))
         
         mask_path = os.path.join(self.mask_dir, self.images[idx])
-        mask = Image.open(mask_path).convert('L')
+        mask = Image.open(mask_path).convert('L') # size : (W, H)
         mask = mask.resize((self.resize, self.resize), resample=Image.NEAREST)
-        mask = tf(mask)
-        mask *= 255
+        mask = np.array(mask) # (H, W)
+        mask = torch.from_numpy(mask)
         
         if self.transform:
             image = self.transform(image)
