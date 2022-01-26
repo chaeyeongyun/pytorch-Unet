@@ -4,6 +4,7 @@ import argparse
 import time
 import datetime
 from models.model import Unet
+from models.pretrained_model import ResNetUnet
 from dataloader import CustomImageDataset
 from utils import mask_labeling, batch_one_hot
 from evaluate import accuracy_per_pixel, evaluate
@@ -12,7 +13,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torchvision import transforms
+from torchvision import transforms, models
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
@@ -21,18 +22,22 @@ def train(opt, model):
     num_epochs, batch_size, lr, num_classes = opt.num_epochs, opt.batch_size, opt.init_lr, opt.num_classes
     input_size, ignore_idx = opt.input_size, opt.ignore_idx
     start_epoch, load_model, dataset_path, save_txt = opt.start_epoch, opt.load_model, opt.dataset_path, opt.save_txt
-    save_checkpoint, checkpoint_dir = opt.save_checkpoint, opt.checkpoint_dir, 
+    save_checkpoint, checkpoint_dir, pretrained = opt.save_checkpoint, opt.checkpoint_dir, opt.pretrained
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
-   
-    model = Unet(num_classes=num_classes).to(device)
-    if load_model is not None:
-        model.load_state_dict(torch.load(load_model))
 
+    if pretrained:
+        model = ResNetUnet(num_classes=num_classes)
+    elif load_model is not None:
+        model = Unet(num_classes=num_classes)
+        model.load_state_dict(torch.load(load_model))
+    else :
+        model = Unet(num_classes=num_classes)    
+
+    model.to(device)
     # data load
-    training_data = CustomImageDataset(os.path.join(dataset_path, 'train_images'), os.path.join(dataset_path, 'train_masks'), resize=input_size)
-    val_data = CustomImageDataset(os.path.join(dataset_path, 'val_images'), os.path.join(dataset_path, 'val_masks'), resize=input_size)
+    training_data = CustomImageDataset(os.path.join(dataset_path, 'train_images'), os.path.join(dataset_path, 'train_masks'), resize=input_size, pretrained=True)
+    val_data = CustomImageDataset(os.path.join(dataset_path, 'val_images'), os.path.join(dataset_path, 'val_masks'), resize=input_size, pretrained=True)
     trainloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
     valloader = DataLoader(val_data, batch_size=1)
 
@@ -132,6 +137,7 @@ def train(opt, model):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--pretrained', type=bool, default=True, help='if it''s true, pretrained weights will loaded from torch hub')
     parser.add_argument('--num_epochs', type=int, default=25, help='the number of epochs')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')

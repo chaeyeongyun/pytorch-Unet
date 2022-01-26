@@ -9,10 +9,11 @@ import torch.nn.functional as F
 import torchvision.transforms as transforms
 
 class CustomImageDataset(Dataset):
-    def __init__(self, img_dir, mask_dir, resize=512, transform=None, target_transform=None):
+    def __init__(self, img_dir, mask_dir, resize=512, pretrained=False, transform=None, target_transform=None):
         self.mask_dir = mask_dir
         self.img_dir = img_dir
         self.resize=resize
+        self.pretrained = pretrained
         self.images = glob.glob(os.path.join(self.img_dir, '*.png'))
         self.images = [img.split('/')[-1] for img in self.images]
         self.transform = transform
@@ -29,7 +30,10 @@ class CustomImageDataset(Dataset):
         image = image.resize((self.resize, self.resize))
         image = tf(image)
         # image *= 255
-        image = F.pad(image, (4, 4, 4, 4))
+        if self.pretrained:
+            image = F.pad(image, (2, 2, 2, 2))
+        else:
+            image = F.pad(image, (4, 4, 4, 4))
         
         mask_path = os.path.join(self.mask_dir, self.images[idx])
         mask = Image.open(mask_path).convert('L') # size : (W, H)
