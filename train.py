@@ -6,7 +6,7 @@ import datetime
 from models.model import Unet
 from dataloader import CustomImageDataset
 from utils import mask_labeling, batch_one_hot
-from evaluate import accuracy_per_pixel, evaluate
+from evaluate import accuracy_per_pixel, evaluate, miou
 import numpy as np
 import torch
 import torch.nn as nn
@@ -50,7 +50,11 @@ def train(opt, model):
     start = time.time()
     if save_txt:
         f = open(os.path.join(save_model_path, 'result.txt'),'w')
-    
+        file = open(os.path.join(save_model_path,'train information.txt'), 'w')
+        information = "batch size %d, num_epochs %d, init_lr %.8f, input size %d, device  %s\n" % (batch_size, num_epochs, lr, input_size, device)
+        file.write(information)
+        file.close()
+        
     best_val_acc = 0
     start = time.time()
     # start training
@@ -58,8 +62,12 @@ def train(opt, model):
         model.train()
         train_acc_pixel = 0
         train_loss = 0
+        train_miou = 0
 
         iter = 0
+        ######
+        # nomiou = 0
+        #####
         for x_batch, y_batch in trainloader:
             iter +=1
             msg = '\riteration  %d / %d'%(iter, trainloader_length)
@@ -74,55 +82,61 @@ def train(opt, model):
             pred = model(x_batch) # (N, C(n_classes), H, W)
             
             y_batch = mask_labeling(y_batch, num_classes) # (N, H, W) and has [0, numclass -1] value
-            # y_batch = torch.reshape(y_batch, (y_batch.shape[0], -1)) # (N, 1xHxW)
-            # y_batch = batch_one_hot(y_batch, num_classes)
             y_batch = y_batch.to(device, dtype=torch.long)
             
-            # pred = torch.reshape(pred, (pred.shape[0], pred.shape[1], -1))# (N, C, HxW)
-            # pred = pred.type(torch.float64)
-            # pred = pred.softmax(dim=1)
-
             loss = nn.CrossEntropyLoss()
-            # pred_ = torch.reshape(pred, [pred.shape[0]*pred.shape[2]*pred.shape[3], pred.shape[1]])
-            # lab_ = torch.reshape(onehot_y, [onehot_y.shape[0]*onehot_y.shape[2]*onehot_y.shape[3], onehot_y.shape[1]])
             loss_output = loss(pred, y_batch)
-            # loss_output = torch.mean(lab_*torch.log(pred_ + 1e-7), -1)
             loss_output.backward()
+            
+            # update parameters
+            optimizer.step()
             
             #accuracy calculate
             copied_pred = pred.data.cpu().numpy() 
             copied_y_batch = y_batch.data.cpu().numpy() 
             accuracy_px = accuracy_per_pixel(copied_pred, copied_y_batch, ignore_idx)
+            miou_per_batch = miou(copied_pred, copied_y_batch, num_classes, ignore_idx)
             
             # train loss / train accuracy
             train_acc_pixel += accuracy_px
             train_loss += loss_output.item()
-        
+            if miou_per_batch == -1:
+                train_miou += train_miou / iter
+                #####
+                # nomiou += 1
+                #####
+            else : train_miou += miou_per_batch
+            
         # evaluate after 1 epoch training
-        val_loss, val_acc_pixel = evaluate(model, valloader, device, num_classes, ignore_idx)
+        val_loss, val_acc_pixel, val_miou = evaluate(model, valloader, device, num_classes, ignore_idx)
         torch.cuda.empty_cache()
         
         if save_checkpoint:
             if val_acc_pixel > best_val_acc:
-                torch.save(model.state_dict(), os.path.join(save_model_path, f'{epoch}_{num_epochs}ep_{batch_size}b_best.pt'))
+                torch.save(model.state_dict(), os.path.join(save_model_path, f'best.pt'))
                 best_val_acc = val_acc_pixel
                 
         train_acc_pixel = train_acc_pixel / trainloader_length
         train_loss = train_loss / trainloader_length
+        train_miou = train_miou / trainloader_length
+        
         lr_scheduler.step(val_loss)
         writer.add_scalars('Loss', {'trainloss':train_loss, 'valloss':val_loss}, epoch)
         writer.add_scalars('Accuracy', {'trainacc':train_acc_pixel, 'valacc':val_acc_pixel}, epoch)
         
          # Metrics calculation
-        result_txt = "\nEpoch: %d, loss: %.8f, Train accuracy: %.8f, Test accuracy: %.8f, Test loss: %.8f, lr: %5f" % (epoch+1, train_loss, train_acc_pixel, val_acc_pixel, val_loss, optimizer.param_groups[0]['lr'])
+        result_txt = "\nEpoch: %d, loss: %.8f, Train accuracy: %.8f, Train miou: %.8f, Val accuracy: %.8f, Val miou: %.8f, Val loss: %.8f, lr: %5f" % (epoch+1, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss, optimizer.param_groups[0]['lr'])
         if save_txt:
             f.write(result_txt)
         print(result_txt)
     
     finish = time.time()
     print("---------training finish---------")
-    total_result_txt = "\nTotal time: %d(sec), Total Epoch: %d, loss: %.5f, Train accuracy: %.5f, Test accuracy: %.5f, Test loss: %.5f" % (finish-start, num_epochs, train_loss, train_acc_pixel, val_acc_pixel, val_loss)
-    # print("\nTotal time: %d(sec), Total Epoch: %d, loss: %.5f, Train accuracy: %.5f, Test accuracy: %.5f, Test loss: %.5f" % (finish-start, num_epochs, train_loss, train_acc, test_acc, test_loss))
+    ######
+    # print('nomiou', nomiou)
+    ######
+    total_result_txt = "\nTotal time: %d(sec), Total Epoch: %d, loss: %.5f, Train accuracy: %.5f, Train miou : %.5f, Val accuracy: %.5f, Val miou: %.5f, Val loss: %.5f" % (finish-start, num_epochs, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss)
+    
     print(total_result_txt)
     if save_txt:
         f.write(total_result_txt)
@@ -141,8 +155,8 @@ if __name__ == '__main__':
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
     parser.add_argument('--start_epoch', type=int, default=0, help='the start number of epochs')
     parser.add_argument('--load_model',default=None, type=str, help='the name of saved model file (.pt)')
-    parser.add_argument('--save_txt', type=bool, default=False, help='if it''s true, the result of trainig will be saved as txt file.')
-    parser.add_argument('--save_checkpoint', type=bool, default=False, help='if it''s true, the model will saved at checkpoint dir')
+    parser.add_argument('--save_txt', type=bool, default=True, help='if it''s true, the result of trainig will be saved as txt file.')
+    parser.add_argument('--save_checkpoint', type=bool, default=True, help='if it''s true, the model will saved at checkpoint dir')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoint', help='path to save checkpoint file')
     
     opt = parser.parse_args()
