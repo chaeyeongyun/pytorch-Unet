@@ -34,12 +34,12 @@ def train(opt, model):
     
     elif pretrained and load_model is not None:
         print('ResNetUnet -- load model... --')
-        model = ResNetUnet(num_classes=num_classes)
+        model = ResNetUnet(num_classes=num_classes, init_weights=False)
         model.load_state_dict(torch.load(load_model))
         
     elif not pretrained and load_model is not None:
         print('Unet -- load model... --')
-        model = Unet(num_classes=num_classes)
+        model = Unet(num_classes=num_classes, init_weights=False)
         model.load_state_dict(torch.load(load_model))
     else :
         print('Unet')
@@ -178,7 +178,7 @@ def train(opt, model):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pretrained', type=bool, default=False, help='if it''s true, pretrained weights will loaded from torch hub')
-    parser.add_argument('--num_epochs', type=int, default=25, help='the number of epochs')
+    parser.add_argument('--num_epochs', type=int, default=50, help='the number of epochs')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
