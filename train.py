@@ -129,6 +129,10 @@ def train(opt, model):
         # evaluate after 1 epoch training
         val_loss, val_acc_pixel, val_miou = evaluate(model, valloader, device, num_classes, ignore_idx)
         torch.cuda.empty_cache()
+                
+        train_acc_pixel = train_acc_pixel / trainloader_length
+        train_loss = train_loss / trainloader_length
+        train_miou = train_miou / trainloader_length
         
         if save_checkpoint:
             writer.add_scalars('Loss', {'trainloss':train_loss, 'valloss':val_loss}, epoch)
@@ -137,10 +141,6 @@ def train(opt, model):
             if val_acc_pixel > best_val_acc:
                 torch.save(model.state_dict(), os.path.join(save_model_path, f'best.pt'))
                 best_val_acc = val_acc_pixel
-                
-        train_acc_pixel = train_acc_pixel / trainloader_length
-        train_loss = train_loss / trainloader_length
-        train_miou = train_miou / trainloader_length
         
         lr_scheduler.step(val_loss)
         

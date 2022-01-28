@@ -6,7 +6,7 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 import PIL.Image as Image
-from evaluate import evaluate, accuracy_per_pixel, miou
+from evaluate import accuracy_per_pixel, miou
 from utils import mask_labeling
 from dataloader import CustomImageDataset
 from models.model import Unet
