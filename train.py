@@ -23,7 +23,7 @@ def train(opt, model):
     num_epochs, batch_size, lr, num_classes = opt.num_epochs, opt.batch_size, opt.init_lr, opt.num_classes
     input_size, ignore_idx = opt.input_size, opt.ignore_idx
     start_epoch, load_model, dataset_path, save_txt = opt.start_epoch, opt.load_model, opt.dataset_path, opt.save_txt
-    save_checkpoint, checkpoint_dir, pretrained = opt.save_checkpoint, opt.checkpoint_dir, opt.pretrained
+    save_checkpoint, checkpoint_dir, save_imgs, pretrained = opt.save_checkpoint, opt.checkpoint_dir, opt.save_imgs, opt.pretrained
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
@@ -47,9 +47,6 @@ def train(opt, model):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0001, amsgrad=False)
     lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
     
-   
-    
-    
     dt = datetime.datetime.now()
     if save_checkpoint:
         save_model_path = os.path.join(checkpoint_dir, f"{dt.month}-{dt.day}-{dt.hour}-{dt.minute}")
@@ -64,6 +61,10 @@ def train(opt, model):
         information = "pretrain %s, batch size %d, num_epochs %d, init_lr %.8f, input size %d, device  %s\n" % (pretrained, batch_size, num_epochs, lr, input_size, device)
         file.write(information)
         file.close()
+    
+    if save_imgs:
+        img_dir = os.path.join(save_model_path, 'imgs')
+        os.makedirs(img_dir)
         
     best_val_acc = 0
     start = time.time()
@@ -75,9 +76,7 @@ def train(opt, model):
         train_miou = 0
 
         iter = 0
-        ######
-        nomiou = 0
-        #####
+
         for x_batch, y_batch in trainloader:
             iter +=1
             msg = '\riteration  %d / %d'%(iter, trainloader_length)
@@ -110,7 +109,7 @@ def train(opt, model):
                 concat_list = []
                 for b in range(batch_size):
                     concat_list += [show_predict[b]]
-                plt.imsave('./imgs/{}ep_predict.png'.format(epoch), np.concatenate(concat_list, 0))
+                plt.imsave(os.path.join(img_dir, '{}ep_predict.png'.format(epoch)), np.concatenate(concat_list, 0))
             
             
             #accuracy calculate
@@ -124,9 +123,7 @@ def train(opt, model):
             train_loss += loss_output.item()
             if miou_per_batch == -1:
                 train_miou += train_miou / iter
-                #####
-                nomiou += 1
-                #####
+
             else : train_miou += miou_per_batch
             
         # evaluate after 1 epoch training
@@ -155,17 +152,18 @@ def train(opt, model):
         print(result_txt)
     
     finish = time.time()
-    print("---------training finish---------")
-    ######
-    print('nomiou', nomiou)
-    ######
-    total_result_txt = "\nTotal time: %d(sec), Total Epoch: %d, loss: %.5f, Train accuracy: %.5f, Train miou : %.5f, Val accuracy: %.5f, Val miou: %.5f, Val loss: %.5f" % (finish-start, num_epochs, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss)
     
+    print("---------training finish---------")
+    
+    total_result_txt = "\nTotal time: %d(sec), Total Epoch: %d, loss: %.5f, Train accuracy: %.5f, Train miou : %.5f, Val accuracy: %.5f, Val miou: %.5f, Val loss: %.5f" % (finish-start, num_epochs, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss)
     print(total_result_txt)
+    
     if save_txt:
         f.write(total_result_txt)
         f.close()
-    torch.save(model.state_dict(), os.path.join(save_model_path, f'{num_epochs}ep_{batch_size}b_final.pt'))
+    
+    if save_checkpoint:
+        torch.save(model.state_dict(), os.path.join(save_model_path, f'{num_epochs}ep_{batch_size}b_final.pt'))
 
 
 if __name__ == '__main__':
@@ -182,6 +180,7 @@ if __name__ == '__main__':
     parser.add_argument('--load_model',default=None, type=str, help='the name of saved model file (.pt)')
     parser.add_argument('--save_txt', type=bool, default=True, help='if it''s true, the result of trainig will be saved as txt file.')
     parser.add_argument('--save_checkpoint', type=bool, default=True, help='if it''s true, the model will saved at checkpoint dir')
+    parser.add_argument('--save_imgs', type=bool, default=True, help='if it''s true, the predict images will saved at image dir')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoint', help='path to save checkpoint file')
     
     opt = parser.parse_args()
