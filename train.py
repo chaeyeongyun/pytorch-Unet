@@ -7,7 +7,7 @@ import datetime
 from models.model import Unet
 from models.pretrained_model import ResNetUnet
 from dataloader import CustomImageDataset
-from utils import mask_labeling, batch_one_hot
+from utils import mask_labeling
 from evaluate import accuracy_per_pixel, evaluate, miou
 import numpy as np
 import torch
