@@ -29,11 +29,20 @@ def train(opt, model):
     
    
     if pretrained:
+        print('ResNetUnet')
         model = ResNetUnet(num_classes=num_classes)
-    elif load_model is not None:
+    
+    elif pretrained and load_model is not None:
+        print('ResNetUnet -- load model... --')
+        model = ResNetUnet(num_classes=num_classes)
+        model.load_state_dict(torch.load(load_model))
+        
+    elif not pretrained and load_model is not None:
+        print('Unet -- load model... --')
         model = Unet(num_classes=num_classes)
         model.load_state_dict(torch.load(load_model))
     else :
+        print('Unet')
         model = Unet(num_classes=num_classes)    
 
     model.to(device)
