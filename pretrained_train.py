@@ -26,8 +26,8 @@ def train(opt, model):
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    if pretrained:
-        model = ResNetUnet(num_classes=num_classes)
+    
+    model = ResNetUnet(num_classes=num_clif pretrained:asses)
     elif load_model is not None:
         model = Unet(num_classes=num_classes)
         model.load_state_dict(torch.load(load_model))

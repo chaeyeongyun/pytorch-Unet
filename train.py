@@ -1,9 +1,11 @@
 import os
 import logging
+import matplotlib.pyplot as plt
 import argparse
 import time
 import datetime
 from models.model import Unet
+from models.pretrained_model import ResNetUnet
 from dataloader import CustomImageDataset
 from utils import mask_labeling, batch_one_hot
 from evaluate import accuracy_per_pixel, evaluate, miou
@@ -21,18 +23,23 @@ def train(opt, model):
     num_epochs, batch_size, lr, num_classes = opt.num_epochs, opt.batch_size, opt.init_lr, opt.num_classes
     input_size, ignore_idx = opt.input_size, opt.ignore_idx
     start_epoch, load_model, dataset_path, save_txt = opt.start_epoch, opt.load_model, opt.dataset_path, opt.save_txt
-    save_checkpoint, checkpoint_dir = opt.save_checkpoint, opt.checkpoint_dir, 
+    save_checkpoint, checkpoint_dir, pretrained = opt.save_checkpoint, opt.checkpoint_dir, opt.pretrained
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
    
-    model = Unet(num_classes=num_classes).to(device)
-    if load_model is not None:
+    if pretrained:
+        model = ResNetUnet(num_classes=num_classes)
+    elif load_model is not None:
+        model = Unet(num_classes=num_classes)
         model.load_state_dict(torch.load(load_model))
+    else :
+        model = Unet(num_classes=num_classes)    
 
+    model.to(device)
     # data load
-    training_data = CustomImageDataset(os.path.join(dataset_path, 'train_images'), os.path.join(dataset_path, 'train_masks'), resize=input_size)
-    val_data = CustomImageDataset(os.path.join(dataset_path, 'val_images'), os.path.join(dataset_path, 'val_masks'), resize=input_size)
+    training_data = CustomImageDataset(os.path.join(dataset_path, 'train_images'), os.path.join(dataset_path, 'train_masks'), resize=input_size, pretrained=pretrained)
+    val_data = CustomImageDataset(os.path.join(dataset_path, 'val_images'), os.path.join(dataset_path, 'val_masks'), resize=input_size, pretrained=pretrained)
     trainloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
     valloader = DataLoader(val_data, batch_size=1)
 
@@ -40,18 +47,21 @@ def train(opt, model):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0001, amsgrad=False)
     lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
     
-    # for tensorboard
-    writer = SummaryWriter()
+   
+    
     
     dt = datetime.datetime.now()
     if save_checkpoint:
         save_model_path = os.path.join(checkpoint_dir, f"{dt.month}-{dt.day}-{dt.hour}-{dt.minute}")
         os.makedirs(save_model_path)
+         # for tensorboard
+        writer = SummaryWriter(log_dir=os.path.join(save_model_path, 'runs'))
+        
     start = time.time()
     if save_txt:
         f = open(os.path.join(save_model_path, 'result.txt'),'w')
         file = open(os.path.join(save_model_path,'train information.txt'), 'w')
-        information = "batch size %d, num_epochs %d, init_lr %.8f, input size %d, device  %s\n" % (batch_size, num_epochs, lr, input_size, device)
+        information = "pretrain %s, batch size %d, num_epochs %d, init_lr %.8f, input size %d, device  %s\n" % (pretrained, batch_size, num_epochs, lr, input_size, device)
         file.write(information)
         file.close()
         
@@ -66,7 +76,7 @@ def train(opt, model):
 
         iter = 0
         ######
-        # nomiou = 0
+        nomiou = 0
         #####
         for x_batch, y_batch in trainloader:
             iter +=1
@@ -91,6 +101,18 @@ def train(opt, model):
             # update parameters
             optimizer.step()
             
+            if iter == len(trainloader):
+                color_map = np.array([[0,0,0],[0,0,255],[255, 0, 0]], np.uint8)
+                temp_pred = pred.data.cpu().numpy() # (N, C, H, W)
+                temp_pred = np.swapaxes(temp_pred, 1, 3) # (N, H, W, C)
+                temp_pred = np.argmax(temp_pred, -1) # (N, H, W)
+                show_predict = color_map[temp_pred]     # (N, H, W, 3)
+                concat_list = []
+                for b in range(batch_size):
+                    concat_list += [show_predict[b]]
+                plt.imsave('./imgs/{}ep_predict.png'.format(epoch), np.concatenate(concat_list, 0))
+            
+            
             #accuracy calculate
             copied_pred = pred.data.cpu().numpy() 
             copied_y_batch = y_batch.data.cpu().numpy() 
@@ -103,7 +125,7 @@ def train(opt, model):
             if miou_per_batch == -1:
                 train_miou += train_miou / iter
                 #####
-                # nomiou += 1
+                nomiou += 1
                 #####
             else : train_miou += miou_per_batch
             
@@ -112,6 +134,9 @@ def train(opt, model):
         torch.cuda.empty_cache()
         
         if save_checkpoint:
+            writer.add_scalars('Loss', {'trainloss':train_loss, 'valloss':val_loss}, epoch)
+            writer.add_scalars('Accuracy', {'trainacc':train_acc_pixel, 'valacc':val_acc_pixel}, epoch)
+            writer.add_scalars('mIOU', {'trainmiou':train_miou, 'valmiou':val_miou}, epoch)
             if val_acc_pixel > best_val_acc:
                 torch.save(model.state_dict(), os.path.join(save_model_path, f'best.pt'))
                 best_val_acc = val_acc_pixel
@@ -121,8 +146,7 @@ def train(opt, model):
         train_miou = train_miou / trainloader_length
         
         lr_scheduler.step(val_loss)
-        writer.add_scalars('Loss', {'trainloss':train_loss, 'valloss':val_loss}, epoch)
-        writer.add_scalars('Accuracy', {'trainacc':train_acc_pixel, 'valacc':val_acc_pixel}, epoch)
+        
         
          # Metrics calculation
         result_txt = "\nEpoch: %d, loss: %.8f, Train accuracy: %.8f, Train miou: %.8f, Val accuracy: %.8f, Val miou: %.8f, Val loss: %.8f, lr: %5f" % (epoch+1, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss, optimizer.param_groups[0]['lr'])
@@ -133,7 +157,7 @@ def train(opt, model):
     finish = time.time()
     print("---------training finish---------")
     ######
-    # print('nomiou', nomiou)
+    print('nomiou', nomiou)
     ######
     total_result_txt = "\nTotal time: %d(sec), Total Epoch: %d, loss: %.5f, Train accuracy: %.5f, Train miou : %.5f, Val accuracy: %.5f, Val miou: %.5f, Val loss: %.5f" % (finish-start, num_epochs, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss)
     
@@ -146,6 +170,7 @@ def train(opt, model):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--pretrained', type=bool, default=False, help='if it''s true, pretrained weights will loaded from torch hub')
     parser.add_argument('--num_epochs', type=int, default=25, help='the number of epochs')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
