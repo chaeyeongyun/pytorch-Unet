@@ -36,6 +36,9 @@ def test(opt):
         print('load_model...')
         model.load_state_dict(torch.load(load_model))
     
+    testdirs = os.listdir(save_path).sort()
+    testdir = testdirs[-1][0:-1]+str(int(testdirs[-1][-1])+1)
+    save_path = os.path.join(save_path, testdir)
     if save_txt:
         os.makedirs(save_path, exist_ok=True)
         f = open(os.path.join(save_path, 'testresult.txt'),'w')
@@ -104,7 +107,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--ignore_idx', type=int, default=None, help='ignore index i.e. background class')
     parser.add_argument('--dataset_path', type=str, default='../cropweed/IJRR2017', help='dataset directory path')
-    parser.add_argument('--save_path', type=str, default='./test/test0', help='dataset directory path')
+    parser.add_argument('--save_path', type=str, default='./test', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
     parser.add_argument('--load_model',default='./checkpoint/pretrained/25ep_2b_final.pt', type=str, help='the name of saved model file (.pt)')
     parser.add_argument('--save_txt', type=bool, default=True, help='if it''s true, the result of trainig will be saved as txt file.')

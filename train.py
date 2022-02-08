@@ -49,7 +49,7 @@ def train(opt, model):
     # data load
     training_data = CustomImageDataset(os.path.join(dataset_path, 'train_images'), os.path.join(dataset_path, 'train_masks'), resize=input_size, pretrained=pretrained)
     val_data = CustomImageDataset(os.path.join(dataset_path, 'val_images'), os.path.join(dataset_path, 'val_masks'), resize=input_size, pretrained=pretrained)
-    trainloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
+    trainloader = DataLoader(training_data, batch_size=batch_size, shuffle=True, drop_last=True)
     valloader = DataLoader(val_data, batch_size=1)
 
     trainloader_length = len(trainloader)
@@ -67,7 +67,7 @@ def train(opt, model):
     if save_txt:
         f = open(os.path.join(save_model_path, 'result.txt'),'w')
         file = open(os.path.join(save_model_path,'train information.txt'), 'w')
-        information = "pretrain %s, batch size %d, num_epochs %d, init_lr %.8f, input size %d, device  %s\n" % (pretrained, batch_size, num_epochs, lr, input_size, device)
+        information = "dataset path : %s \npretrain %s, batch size %d, num_epochs %d, init_lr %.8f, input size %d, device  %s\n" % (dataset_path, pretrained, batch_size, num_epochs, lr, input_size, device)
         file.write(information)
         file.close()
     
@@ -75,7 +75,7 @@ def train(opt, model):
         img_dir = os.path.join(save_model_path, 'imgs')
         os.makedirs(img_dir)
         
-    best_val_acc = 0
+    best_val_miou = 0
     start = time.time()
     # start training
     for epoch in range(start_epoch, num_epochs):
@@ -102,7 +102,11 @@ def train(opt, model):
             y_batch = mask_labeling(y_batch, num_classes) # (N, H, W) and has [0, numclass -1] value
             y_batch = y_batch.to(device, dtype=torch.long)
             
-            loss = nn.CrossEntropyLoss()
+            if ignore_idx is not None:
+                loss = nn.CrossEntropyLoss(ignore_index=ignore_idx)
+            else:
+                loss = nn.CrossEntropyLoss()    
+            
             loss_output = loss(pred, y_batch)
             loss_output.backward()
             
@@ -147,9 +151,9 @@ def train(opt, model):
             writer.add_scalars('Loss', {'trainloss':train_loss, 'valloss':val_loss}, epoch)
             writer.add_scalars('Accuracy', {'trainacc':train_acc_pixel, 'valacc':val_acc_pixel}, epoch)
             writer.add_scalars('mIOU', {'trainmiou':train_miou, 'valmiou':val_miou}, epoch)
-            if val_acc_pixel > best_val_acc:
+            if val_miou > best_val_miou:
                 torch.save(model.state_dict(), os.path.join(save_model_path, f'best.pt'))
-                best_val_acc = val_acc_pixel
+                best_val_miou = val_miou
         
         lr_scheduler.step(val_loss)
         
@@ -177,12 +181,12 @@ def train(opt, model):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--pretrained', type=bool, default=False, help='if it''s true, pretrained weights will loaded from torch hub')
+    parser.add_argument('--pretrained', type=bool, default=False, help='if it''s true, use ResNetUnet model, and pretrained weights will loaded from torch hub')
     parser.add_argument('--num_epochs', type=int, default=50, help='the number of epochs')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
-    parser.add_argument('--ignore_idx', type=int, default=None, help='ignore index i.e. background class')
+    parser.add_argument('--ignore_idx', type=int, default=0, help='ignore index i.e. background class')
     parser.add_argument('--dataset_path', type=str, default='../cropweed/IJRR2017', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
     parser.add_argument('--start_epoch', type=int, default=0, help='the start number of epochs')
