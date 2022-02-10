@@ -1,3 +1,4 @@
+from re import L
 from utils import mask_labeling
 import numpy as np
 import torch
@@ -9,6 +10,13 @@ def miou(pred, target, num_classes, ignore_idx):
     pred: (N, C, H, W), ndarray
     target : (N, H, W), ndarray
     '''
+    def bincount_fn(cats, num_classes):
+        bincount = np.zeros((num_classes**2,))
+        l = list(cats)
+        for i in range(num_classes**2):
+            bincount[i] = l.count(i)
+        return bincount
+        
     pred = pred.argmax(axis=1) # (N, H, W)
     assert pred.shape[0] == target.shape[0], \
         "pred and target's batch size (shape[0]) must have same value "
@@ -19,17 +27,20 @@ def miou(pred, target, num_classes, ignore_idx):
     
     cats_cnt = []
     for i in range(batchsize):
+        # target_1d[i] : (HxW, ), pred_1d[i] : (HxW, )
         cats = target_1d[i] * num_classes + pred_1d[i]
         
-        cats_cnt += [np.bincount(cats)]
-        if i>0:
-            if cats_cnt[i-1].shape != cats_cnt[i].shape:
-                '''
-                when calculating miou, the number of categories has to be num_classes ^ 2 but sometimes 
-                '''
-                return -1
+        bincount = np.bincount(cats)
+        # cats_cnt += [np.bincount(cats)]
+        cats_cnt += [bincount if bincount.shape[0] == num_classes**2 else bincount_fn(cats, num_classes)]
+        # if i>0:
+        #     if cats_cnt[i-1].shape != cats_cnt[i].shape:
+        #         '''
+        #         when calculating miou, the number of categories has to be num_classes ^ 2 but sometimes 
+        #         '''
+        #         return -1
     cats_cnt = np.array(cats_cnt) # (N, num_classes^2)
-    if cats_cnt.shape[1] != (num_classes ** 2): return -1
+    # if cats_cnt.shape[1] != (num_classes ** 2): return -1
     
     conf_mat = np.reshape(cats_cnt, (batchsize, num_classes, num_classes))
     
@@ -56,12 +67,23 @@ def accuracy_per_pixel(pred, target, ignore_idx):
     pred: (N, C, H, W), ndarray
     target : (N, H, W), ndarray
     '''
+    batchsize = pred.shape[0]
     pred = pred.argmax(axis=1) # (N, H, W)
-    # if ignore_idx is not None:
-    #     pred = np.where(pred==ignore_idx, -1, pred) # ignore_idx -> -1
+    pred = np.reshape(pred, (pred.shape[0], pred.shape[1]*pred.shape[2])) # (N, HxW)
+    target = np.reshape(target, (target.shape[0], target.shape[1]*target.shape[2])) # (N, HxW)
     
-    accuracy = np.sum(pred == target) / (target.shape[0] * target.shape[1] * target.shape[2] )
-    return accuracy
+    accuracy_per_image = []
+    for b in range(batchsize):
+        if ignore_idx is not None:
+            not_ignore_idxs = np.where(target[b]!=ignore_idx) # ignore_idx -> -1
+            pred_temp = pred[b][not_ignore_idxs] # 1dim
+            target_temp = target[b][not_ignore_idxs] # 1dim
+            accuracy_per_image += [np.sum(pred_temp == target_temp) / target_temp.shape[0]]
+        else : 
+            accuracy_per_image += [np.sum(pred[b] == target[b]) / target[b].shape[0]]
+    
+    acc = sum(accuracy_per_image) / len(accuracy_per_image)
+    return acc
 
 def evaluate(model, valloader, device, num_classes, ignore_idx):
     model.eval()
@@ -102,6 +124,7 @@ if __name__ == '__main__':
     np.random.seed(0)
     pred = np.random.randint(low=0, high=3, size=(2, 3, 24, 24))
     gt = np.random.randint(low=0, high=3, size=(2, 24, 24))
-    miou = miou(pred, gt, 3, 0)
-    print(miou)
+    miou = miou(pred, gt, 3, None)
+    # accuracy_per_pixel(pred, gt, None)
+    # print(miou)
     

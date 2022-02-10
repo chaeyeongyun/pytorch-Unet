@@ -182,11 +182,11 @@ def train(opt, model):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pretrained', type=bool, default=False, help='if it''s true, use ResNetUnet model, and pretrained weights will loaded from torch hub')
-    parser.add_argument('--num_epochs', type=int, default=50, help='the number of epochs')
+    parser.add_argument('--num_epochs', type=int, default=25, help='the number of epochs')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
-    parser.add_argument('--ignore_idx', type=int, default=0, help='ignore index i.e. background class')
+    parser.add_argument('--ignore_idx', type=int, default=None, help='ignore index i.e. background class')
     parser.add_argument('--dataset_path', type=str, default='../cropweed/IJRR2017', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
     parser.add_argument('--start_epoch', type=int, default=0, help='the start number of epochs')
