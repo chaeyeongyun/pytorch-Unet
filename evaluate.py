@@ -1,4 +1,3 @@
-from re import L
 from utils import mask_labeling
 import numpy as np
 import torch
@@ -31,19 +30,11 @@ def miou(pred, target, num_classes, ignore_idx):
         cats = target_1d[i] * num_classes + pred_1d[i]
         
         bincount = np.bincount(cats)
-        # cats_cnt += [np.bincount(cats)]
         cats_cnt += [bincount if bincount.shape[0] == num_classes**2 else bincount_fn(cats, num_classes)]
-        # if i>0:
-        #     if cats_cnt[i-1].shape != cats_cnt[i].shape:
-        #         '''
-        #         when calculating miou, the number of categories has to be num_classes ^ 2 but sometimes 
-        #         '''
-        #         return -1
+        
     cats_cnt = np.array(cats_cnt) # (N, num_classes^2)
-    # if cats_cnt.shape[1] != (num_classes ** 2): return -1
     
     conf_mat = np.reshape(cats_cnt, (batchsize, num_classes, num_classes))
-    
     
     miou_per_image = []
     for i in range(batchsize):
@@ -56,7 +47,6 @@ def miou(pred, target, num_classes, ignore_idx):
             iou_list += [conf_mat[i][j][j] / (sum_col[j]+sum_row[j]-conf_mat[i][j][j])]
         
         miou_per_image += [sum(iou_list)/len(iou_list)]
-        # print('iou_list:', iou_list, '\tmiou_per_image:', miou_per_image)
     
     miou = sum(miou_per_image) / len(miou_per_image)
     return miou
