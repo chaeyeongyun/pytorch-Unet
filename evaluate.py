@@ -10,6 +10,7 @@ def miou(pred, target, num_classes, ignore_idx):
     target : (N, H, W), ndarray
     '''
     def bincount_fn(cats, num_classes):
+        ''' when the number of category(cats)'s bins is not equal to num_classes^2 '''
         bincount = np.zeros((num_classes**2,))
         l = list(cats)
         for i in range(num_classes**2):
@@ -34,7 +35,8 @@ def miou(pred, target, num_classes, ignore_idx):
         
     cats_cnt = np.array(cats_cnt) # (N, num_classes^2)
     
-    conf_mat = np.reshape(cats_cnt, (batchsize, num_classes, num_classes))
+    # confusion matrix
+    conf_mat = np.reshape(cats_cnt, (batchsize, num_classes, num_classes)) 
     
     miou_per_image = []
     for i in range(batchsize):
@@ -65,9 +67,9 @@ def accuracy_per_pixel(pred, target, ignore_idx):
     accuracy_per_image = []
     for b in range(batchsize):
         if ignore_idx is not None:
-            not_ignore_idxs = np.where(target[b]!=ignore_idx) # ignore_idx -> -1
-            pred_temp = pred[b][not_ignore_idxs] # 1dim
-            target_temp = target[b][not_ignore_idxs] # 1dim
+            not_ignore_idxs = np.where(target[b]!=ignore_idx) # where target is not equal to ignore_idx
+            pred_temp = pred[b][not_ignore_idxs] # 1dim (HxW, )
+            target_temp = target[b][not_ignore_idxs] # 1dim (HxW, )
             accuracy_per_image += [np.sum(pred_temp == target_temp) / target_temp.shape[0]]
         else : 
             accuracy_per_image += [np.sum(pred[b] == target[b]) / target[b].shape[0]]
@@ -91,6 +93,7 @@ def evaluate(model, valloader, device, num_classes, ignore_idx):
         
         loss = nn.CrossEntropyLoss()
         loss_output = loss(pred, y_batch).item()
+        
         copied_pred = pred.data.cpu().numpy() 
         copied_y_batch = y_batch.data.cpu().numpy() 
         accuracy_px = accuracy_per_pixel(copied_pred, copied_y_batch, ignore_idx)

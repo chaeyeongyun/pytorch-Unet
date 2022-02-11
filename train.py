@@ -1,3 +1,4 @@
+#%%
 import os
 import logging
 import matplotlib.pyplot as plt
@@ -102,10 +103,13 @@ def train(opt, model):
             y_batch = mask_labeling(y_batch, num_classes) # (N, H, W) and has [0, numclass -1] value
             y_batch = y_batch.to(device, dtype=torch.long)
             
-            if ignore_idx is not None:
-                loss = nn.CrossEntropyLoss(ignore_index=ignore_idx)
-            else:
-                loss = nn.CrossEntropyLoss()    
+            # if ignore_idx is not None:
+            #     loss = nn.CrossEntropyLoss(ignore_index=ignore_idx)
+            
+            # else:
+            #     loss = nn.CrossEntropyLoss()    
+            
+            loss = nn.CrossEntropyLoss()
             
             loss_output = loss(pred, y_batch)
             loss_output.backward()
@@ -158,7 +162,7 @@ def train(opt, model):
         lr_scheduler.step(val_loss)
         
         
-         # Metrics calculation
+        #  Metrics calculation
         result_txt = "\nEpoch: %d, loss: %.8f, Train accuracy: %.8f, Train miou: %.8f, Val accuracy: %.8f, Val miou: %.8f, Val loss: %.8f, lr: %5f" % (epoch+1, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss, optimizer.param_groups[0]['lr'])
         if save_txt:
             f.write(result_txt)
@@ -186,7 +190,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
-    parser.add_argument('--ignore_idx', type=int, default=None, help='ignore index i.e. background class')
+    parser.add_argument('--ignore_idx', type=int, default=0, help='ignore index i.e. background class')
     parser.add_argument('--dataset_path', type=str, default='../cropweed/IJRR2017', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
     parser.add_argument('--start_epoch', type=int, default=0, help='the start number of epochs')
@@ -206,3 +210,6 @@ if __name__ == '__main__':
     #          torch.save(model.state_dict(), os.path.join(opt.save_model_path, f'interrupt.pt'))
     model = None
     train(opt, model)
+
+
+# %%
