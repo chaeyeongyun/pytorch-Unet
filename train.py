@@ -8,7 +8,8 @@ import datetime
 from models.model import Unet
 from models.pretrained_model import ResNetUnet
 from dataloader import CustomImageDataset
-from utils import mask_labeling
+from utils.utils import mask_labeling
+from utils.dice_loss import dice_loss
 from evaluate import accuracy_per_pixel, evaluate, miou
 import numpy as np
 import torch
@@ -25,6 +26,7 @@ def train(opt, model):
     input_size, ignore_idx = opt.input_size, opt.ignore_idx
     start_epoch, load_model, dataset_path, save_txt = opt.start_epoch, opt.load_model, opt.dataset_path, opt.save_txt
     save_checkpoint, checkpoint_dir, save_imgs, pretrained = opt.save_checkpoint, opt.checkpoint_dir, opt.save_imgs, opt.pretrained
+    loss_fn = opt.loss_fn
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
@@ -109,9 +111,12 @@ def train(opt, model):
             # else:
             #     loss = nn.CrossEntropyLoss()    
             
-            loss = nn.CrossEntropyLoss()
+            if loss_fn == 'ce':
+                loss = nn.CrossEntropyLoss()
+                loss_output = loss(pred, y_batch)
+            elif loss_fn == 'dice':
+                loss_output = dice_loss(pred, y_batch, num_classes, ignore_idx)
             
-            loss_output = loss(pred, y_batch)
             loss_output.backward()
             
             # update parameters
@@ -144,7 +149,7 @@ def train(opt, model):
             else : train_miou += miou_per_batch
             
         # evaluate after 1 epoch training
-        val_loss, val_acc_pixel, val_miou = evaluate(model, valloader, device, num_classes, ignore_idx)
+        val_loss, val_acc_pixel, val_miou = evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx)
         torch.cuda.empty_cache()
                 
         train_acc_pixel = train_acc_pixel / trainloader_length
@@ -190,8 +195,9 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
-    parser.add_argument('--ignore_idx', type=int, default=0, help='ignore index i.e. background class')
-    parser.add_argument('--dataset_path', type=str, default='../cropweed/IJRR2017', help='dataset directory path')
+    parser.add_argument('--loss_fn', type=str, default='dice', help='loss function. ce / dice ')
+    parser.add_argument('--ignore_idx', type=int, default=None, help='ignore index i.e. background class')
+    parser.add_argument('--dataset_path', type=str, default='../cropweed/CWFID', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
     parser.add_argument('--start_epoch', type=int, default=0, help='the start number of epochs')
     parser.add_argument('--load_model',default=None, type=str, help='the name of saved model file (.pt)')

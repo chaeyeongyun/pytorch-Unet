@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import PIL.Image as Image
 from evaluate import accuracy_per_pixel, miou
-from utils import mask_labeling
+from utils.utils import mask_labeling
 from dataloader import CustomImageDataset
 from models.model import Unet
 from models.pretrained_model import ResNetUnet
@@ -36,8 +36,8 @@ def test(opt):
         print('load_model...')
         model.load_state_dict(torch.load(load_model))
     
-    testdirs = os.listdir(save_path).sort()
-    testdir = testdirs[-1][0:-1]+str(int(testdirs[-1][-1])+1)
+    testdirs = os.listdir(save_path)
+    testdir = 'test' + str(len(testdirs))
     save_path = os.path.join(save_path, testdir)
     if save_txt:
         os.makedirs(save_path, exist_ok=True)
@@ -64,20 +64,20 @@ def test(opt):
         loss = nn.CrossEntropyLoss()
         loss_output = loss(pred, y).item()
         
-        
-        if save_imgs:
-            color_map = np.array([[0,0,0],[0,0,255],[255, 0, 0]], np.uint8)
-            temp_pred = pred.data.cpu().numpy() # (1, C, H, W)
-            temp_pred = np.swapaxes(temp_pred, 1, 3) # (1, W, H, C)
-            temp_pred = np.argmax(temp_pred, -1) # (1, W, H)
-            show_predict = color_map[temp_pred]     # (1, W, H, 3)
-            img_name = test_data.images[iter]
-            org_mask = np.transpose(org_mask, (2, 1, 0)) # (1, H, W ) -> (W, H, 1)
-            org_mask = np.concatenate([org_mask]*3, axis=2) # (W, H, 3)
-            org_mask = Image.fromarray(org_mask, mode="RGB")
-            org_mask = np.array(org_mask)
-            plt.imsave(os.path.join(img_dir, '{}'.format(img_name)), np.concatenate((org_mask, show_predict[0]), 1))
-        
+        if iter % 3 == 0:
+            if save_imgs:
+                color_map = np.array([[0,0,0],[0,0,255],[255, 0, 0]], np.uint8)
+                temp_pred = pred.data.cpu().numpy() # (1, C, H, W)
+                temp_pred = np.swapaxes(temp_pred, 1, 3) # (1, W, H, C)
+                temp_pred = np.argmax(temp_pred, -1) # (1, W, H)
+                show_predict = color_map[temp_pred]     # (1, W, H, 3)
+                img_name = test_data.images[iter]
+                org_mask = np.transpose(org_mask, (2, 1, 0)) # (1, H, W ) -> (W, H, 1)
+                org_mask = np.concatenate([org_mask]*3, axis=2) # (W, H, 3)
+                org_mask = Image.fromarray(org_mask, mode="RGB")
+                org_mask = np.array(org_mask)
+                plt.imsave(os.path.join(img_dir, '{}'.format(img_name)), np.concatenate((org_mask, show_predict[0]), 1))
+            
         copied_pred = pred.data.cpu().numpy() 
         copied_y_batch = y.data.cpu().numpy() 
         accuracy_px = accuracy_per_pixel(copied_pred, copied_y_batch, ignore_idx)
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_path', type=str, default='../cropweed/IJRR2017', help='dataset directory path')
     parser.add_argument('--save_path', type=str, default='./test', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
-    parser.add_argument('--load_model',default='./checkpoint/pretrained/25ep_2b_final.pt', type=str, help='the name of saved model file (.pt)')
+    parser.add_argument('--load_model',default='./checkpoint/resnetunet-50/best.pt', type=str, help='the name of saved model file (.pt)')
     parser.add_argument('--save_txt', type=bool, default=True, help='if it''s true, the result of trainig will be saved as txt file.')
     parser.add_argument('--save_imgs', type=bool, default=True, help='if it''s true, the predict images will saved at image dir')
     

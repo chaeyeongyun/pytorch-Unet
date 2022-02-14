@@ -1,10 +1,12 @@
-from utils import mask_labeling
+from utils.utils import mask_labeling
 import numpy as np
 import torch
 import torch.nn as nn
+from utils.dice_loss import dice_loss
 
 
-def miou(pred, target, num_classes, ignore_idx):
+
+def miou(pred, target, num_classes, ignore_idx=None):
     '''
     pred: (N, C, H, W), ndarray
     target : (N, H, W), ndarray
@@ -54,7 +56,7 @@ def miou(pred, target, num_classes, ignore_idx):
     return miou
     
 
-def accuracy_per_pixel(pred, target, ignore_idx):
+def accuracy_per_pixel(pred, target, ignore_idx=None):
     '''
     pred: (N, C, H, W), ndarray
     target : (N, H, W), ndarray
@@ -77,7 +79,7 @@ def accuracy_per_pixel(pred, target, ignore_idx):
     acc = sum(accuracy_per_image) / len(accuracy_per_image)
     return acc
 
-def evaluate(model, valloader, device, num_classes, ignore_idx):
+def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
     model.eval()
     val_acc_pixel = 0
     val_loss = 0
@@ -91,8 +93,11 @@ def evaluate(model, valloader, device, num_classes, ignore_idx):
         y_batch = mask_labeling(y_batch, num_classes)
         y_batch = y_batch.to(device, dtype=torch.long)
         
-        loss = nn.CrossEntropyLoss()
-        loss_output = loss(pred, y_batch).item()
+        if loss_fn == 'ce':
+            loss = nn.CrossEntropyLoss()
+            loss_output = loss(pred, y_batch)
+        elif loss_fn == 'dice':
+            loss_output = dice_loss(pred, y_batch, num_classes, ignore_idx).item()
         
         copied_pred = pred.data.cpu().numpy() 
         copied_y_batch = y_batch.data.cpu().numpy() 
@@ -117,7 +122,11 @@ if __name__ == '__main__':
     np.random.seed(0)
     pred = np.random.randint(low=0, high=3, size=(2, 3, 24, 24))
     gt = np.random.randint(low=0, high=3, size=(2, 24, 24))
-    miou = miou(pred, gt, 3, None)
+    # miou = miou(pred, gt, 3, None)
+    # gt = np.random.randint(low=0, high=3, size=(2, 24, 24))
+    # miou = miou(pred, gt, 3, None)
     # accuracy_per_pixel(pred, gt, None)
     # print(miou)
-    
+    # pred = torch.from_numpy(np.array([[[[0.8, 0.7],[0.3, 0.4]], [[0.1, 0.2], [0.5, 0.7]], [[0.5, 0.7],[0.8, 0.9]]], [[[0.8, 0.7],[0.3, 0.4]], [[0.1, 0.2], [0.5, 0.7]], [[0.5, 0.7],[0.8, 0.9]]]]))
+    # target = np.array([[[0, 1],[2, 2]], [[0, 1],[2, 2]]])
+  
