@@ -60,8 +60,8 @@ def train(opt, model):
     lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
     
     dt = datetime.datetime.now()
+    save_model_path = os.path.join(checkpoint_dir, f"{dataset_path.split('/')[-1]}-{model.__class__.__name__}-{num_epochs}-{dt.month}{dt.day}")
     if save_checkpoint:
-        save_model_path = os.path.join(checkpoint_dir, f"{dt.month}-{dt.day}-{dt.hour}-{dt.minute}")
         os.makedirs(save_model_path)
          # for tensorboard
         writer = SummaryWriter(log_dir=os.path.join(save_model_path, 'runs'))
@@ -70,7 +70,7 @@ def train(opt, model):
     if save_txt:
         f = open(os.path.join(save_model_path, 'result.txt'),'w')
         file = open(os.path.join(save_model_path,'train information.txt'), 'w')
-        information = "dataset path : %s \npretrain %s, batch size %d, num_epochs %d, init_lr %.8f, input size %d, device  %s\n" % (dataset_path, pretrained, batch_size, num_epochs, lr, input_size, device)
+        information = "dataset path : %s \npretrain %s, batch size %d, loss: %s, num_epochs %d, init_lr %.8f, input size %d, device  %s\n" % (dataset_path, pretrained, batch_size, loss_fn, num_epochs, lr, input_size, device)
         file.write(information)
         file.close()
     
@@ -86,7 +86,8 @@ def train(opt, model):
         train_acc_pixel = 0
         train_loss = 0
         train_miou = 0
-
+        iou_per_class = np.array([0]*num_classes, dtype=np.float64)
+        
         iter = 0
 
         for x_batch, y_batch in trainloader:
@@ -107,14 +108,17 @@ def train(opt, model):
             
             # if ignore_idx is not None:
             #     loss = nn.CrossEntropyLoss(ignore_index=ignore_idx)
-            
-            # else:
-            #     loss = nn.CrossEntropyLoss()    
-            
+  
             if loss_fn == 'ce':
-                loss = nn.CrossEntropyLoss()
+                # cross entropy loss
+                if ignore_idx is not None:
+                    loss = nn.CrossEntropyLoss()
+                else: loss = nn.CrossEntropyLoss()
+                
                 loss_output = loss(pred, y_batch)
+            
             elif loss_fn == 'dice':
+                # dice loss
                 loss_output = dice_loss(pred, y_batch, num_classes, ignore_idx)
             
             loss_output.backward()
@@ -138,23 +142,22 @@ def train(opt, model):
             copied_pred = pred.data.cpu().numpy() 
             copied_y_batch = y_batch.data.cpu().numpy() 
             accuracy_px = accuracy_per_pixel(copied_pred, copied_y_batch, ignore_idx)
-            miou_per_batch = miou(copied_pred, copied_y_batch, num_classes, ignore_idx)
+            miou_per_batch, iou_ndarray = miou(copied_pred, copied_y_batch, num_classes, ignore_idx)
             
             # train loss / train accuracy
             train_acc_pixel += accuracy_px
             train_loss += loss_output.item()
-            if miou_per_batch == -1:
-                train_miou += train_miou / iter
-
-            else : train_miou += miou_per_batch
+            train_miou += miou_per_batch
+            iou_per_class += iou_ndarray
             
         # evaluate after 1 epoch training
-        val_loss, val_acc_pixel, val_miou = evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx)
+        val_loss, val_acc_pixel, val_miou, val_ious = evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx)
         torch.cuda.empty_cache()
                 
         train_acc_pixel = train_acc_pixel / trainloader_length
         train_loss = train_loss / trainloader_length
         train_miou = train_miou / trainloader_length
+        train_ious = (np.round(iou_per_class / trainloader_length, 5)).tolist()
         
         if save_checkpoint:
             writer.add_scalars('Loss', {'trainloss':train_loss, 'valloss':val_loss}, epoch)
@@ -169,6 +172,7 @@ def train(opt, model):
         
         #  Metrics calculation
         result_txt = "\nEpoch: %d, loss: %.8f, Train accuracy: %.8f, Train miou: %.8f, Val accuracy: %.8f, Val miou: %.8f, Val loss: %.8f, lr: %5f" % (epoch+1, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss, optimizer.param_groups[0]['lr'])
+        result_txt += f"\n train iou per class = {train_ious}, val iou per class = {val_ious}"
         if save_txt:
             f.write(result_txt)
         print(result_txt)
@@ -191,13 +195,13 @@ def train(opt, model):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pretrained', type=bool, default=False, help='if it''s true, use ResNetUnet model, and pretrained weights will loaded from torch hub')
-    parser.add_argument('--num_epochs', type=int, default=25, help='the number of epochs')
+    parser.add_argument('--num_epochs', type=int, default=50, help='the number of epochs')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
     parser.add_argument('--loss_fn', type=str, default='dice', help='loss function. ce / dice ')
     parser.add_argument('--ignore_idx', type=int, default=None, help='ignore index i.e. background class')
-    parser.add_argument('--dataset_path', type=str, default='../cropweed/CWFID', help='dataset directory path')
+    parser.add_argument('--dataset_path', type=str, default='../cropweed/rice_s_n_w', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
     parser.add_argument('--start_epoch', type=int, default=0, help='the start number of epochs')
     parser.add_argument('--load_model',default=None, type=str, help='the name of saved model file (.pt)')

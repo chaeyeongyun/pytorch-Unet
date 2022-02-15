@@ -37,7 +37,10 @@ def test(opt):
         model.load_state_dict(torch.load(load_model))
     
     testdirs = os.listdir(save_path)
-    testdir = 'test' + str(len(testdirs))
+    testdir = 'test0' if testdirs==[] else 'test' + str(len(testdirs))
+    # if testdirs==[]:
+    #     testdir = 'test0'
+    # testdir = 'test' + str(len(testdirs))
     save_path = os.path.join(save_path, testdir)
     if save_txt:
         os.makedirs(save_path, exist_ok=True)

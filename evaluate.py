@@ -4,21 +4,26 @@ import torch
 import torch.nn as nn
 from utils.dice_loss import dice_loss
 
-
+def bincount_fn(cats, num_classes):
+    '''
+    this function is used to make confusion matrix for calculating miou(and iou)
+    when the number of category(cats)'s bins is not equal to num_classes^2 
+    '''
+    bincount = np.zeros((num_classes**2,))
+    l = list(cats)
+    for i in range(num_classes**2):
+        bincount[i] = l.count(i)
+    return bincount
 
 def miou(pred, target, num_classes, ignore_idx=None):
     '''
+    return iou of each class and miou
     pred: (N, C, H, W), ndarray
     target : (N, H, W), ndarray
+
+    return miou(float), iou_per_class(ndarray)
     '''
-    def bincount_fn(cats, num_classes):
-        ''' when the number of category(cats)'s bins is not equal to num_classes^2 '''
-        bincount = np.zeros((num_classes**2,))
-        l = list(cats)
-        for i in range(num_classes**2):
-            bincount[i] = l.count(i)
-        return bincount
-        
+       
     pred = pred.argmax(axis=1) # (N, H, W)
     assert pred.shape[0] == target.shape[0], \
         "pred and target's batch size (shape[0]) must have same value "
@@ -40,6 +45,7 @@ def miou(pred, target, num_classes, ignore_idx=None):
     # confusion matrix
     conf_mat = np.reshape(cats_cnt, (batchsize, num_classes, num_classes)) 
     
+    iou_per_class = np.array([0]*num_classes, dtype=np.float64)
     miou_per_image = []
     for i in range(batchsize):
         iou_list = []
@@ -49,11 +55,12 @@ def miou(pred, target, num_classes, ignore_idx=None):
             if j==ignore_idx:
                 continue
             iou_list += [conf_mat[i][j][j] / (sum_col[j]+sum_row[j]-conf_mat[i][j][j])]
-        
+        iou_per_class += np.array(iou_list, dtype=np.float64)
         miou_per_image += [sum(iou_list)/len(iou_list)]
     
+    iou_per_class = iou_per_class / batchsize 
     miou = sum(miou_per_image) / len(miou_per_image)
-    return miou
+    return miou, iou_per_class
     
 
 def accuracy_per_pixel(pred, target, ignore_idx=None):
@@ -84,6 +91,8 @@ def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
     val_acc_pixel = 0
     val_loss = 0
     val_miou = 0
+    iou_per_class = np.array([0]*num_classes, dtype=np.float64)
+    
     iter = 0
     for x_batch, y_batch in valloader:
         iter += 1
@@ -102,27 +111,27 @@ def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
         copied_pred = pred.data.cpu().numpy() 
         copied_y_batch = y_batch.data.cpu().numpy() 
         accuracy_px = accuracy_per_pixel(copied_pred, copied_y_batch, ignore_idx)
-        miou_per_batch = miou(copied_pred, copied_y_batch, num_classes, ignore_idx) 
+        miou_per_batch, iou_ndarray = miou(copied_pred, copied_y_batch, num_classes, ignore_idx) 
         # val loss / val accuracy
         val_acc_pixel += accuracy_px
         val_loss += loss_output
-        if miou_per_batch == -1:
-            val_miou += val_miou / iter
-
-        else : val_miou += miou_per_batch
+        val_miou += miou_per_batch
+        iou_per_class += iou_ndarray
         
     
     val_acc_pixel = val_acc_pixel/ len(valloader)
     val_loss = val_loss / len(valloader)
     val_miou = val_miou / len(valloader)
+    val_ious = np.round((iou_per_class / len(valloader)), 5).tolist()
 
-    return val_loss, val_acc_pixel, val_miou
+    return val_loss, val_acc_pixel, val_miou, val_ious
         
 if __name__ == '__main__':
     np.random.seed(0)
     pred = np.random.randint(low=0, high=3, size=(2, 3, 24, 24))
     gt = np.random.randint(low=0, high=3, size=(2, 24, 24))
-    # miou = miou(pred, gt, 3, None)
+    miou, iou_list = miou(pred, gt, 3, None)
+    print(miou, iou_list)
     # gt = np.random.randint(low=0, high=3, size=(2, 24, 24))
     # miou = miou(pred, gt, 3, None)
     # accuracy_per_pixel(pred, gt, None)
