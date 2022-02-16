@@ -69,10 +69,10 @@ def train(opt, model):
     start = time.time()
     if save_txt:
         f = open(os.path.join(save_model_path, 'result.txt'),'w')
-        file = open(os.path.join(save_model_path,'train information.txt'), 'w')
+        # file = open(os.path.join(save_model_path,'train information.txt'), 'w')
         information = "dataset path : %s \npretrain %s, batch size %d, loss: %s, num_epochs %d, init_lr %.8f, input size %d, device  %s\n" % (dataset_path, pretrained, batch_size, loss_fn, num_epochs, lr, input_size, device)
-        file.write(information)
-        file.close()
+        f.write(information)
+        # file.close()
     
     if save_imgs:
         img_dir = os.path.join(save_model_path, 'imgs')

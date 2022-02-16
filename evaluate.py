@@ -104,7 +104,7 @@ def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
         
         if loss_fn == 'ce':
             loss = nn.CrossEntropyLoss()
-            loss_output = loss(pred, y_batch)
+            loss_output = loss(pred, y_batch).item()
         elif loss_fn == 'dice':
             loss_output = dice_loss(pred, y_batch, num_classes, ignore_idx).item()
         
