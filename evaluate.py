@@ -2,7 +2,7 @@ from utils.utils import mask_labeling
 import numpy as np
 import torch
 import torch.nn as nn
-from utils.dice_loss import dice_loss
+from utils.dice_loss import DiceLoss
 
 def bincount_fn(cats, num_classes):
     '''
@@ -17,11 +17,14 @@ def bincount_fn(cats, num_classes):
 
 def miou(pred, target, num_classes, ignore_idx=None):
     '''
-    return iou of each class and miou
-    pred: (N, C, H, W), ndarray
-    target : (N, H, W), ndarray
+    calculate miou
+    
+    Args:
+        pred: (N, C, H, W), ndarray
+        target : (N, H, W), ndarray
 
-    return miou(float), iou_per_class(ndarray)
+    Return:
+        miou(float), iou_per_class(ndarray)
     '''
        
     pred = pred.argmax(axis=1) # (N, H, W)
@@ -65,8 +68,11 @@ def miou(pred, target, num_classes, ignore_idx=None):
 
 def accuracy_per_pixel(pred, target, ignore_idx=None):
     '''
-    pred: (N, C, H, W), ndarray
-    target : (N, H, W), ndarray
+    Args:
+        pred: (N, C, H, W), ndarray
+        target : (N, H, W), ndarray
+    Returns:
+        the accuracy per pixel : acc(int)
     '''
     batchsize = pred.shape[0]
     pred = pred.argmax(axis=1) # (N, H, W)
@@ -104,9 +110,11 @@ def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
         
         if loss_fn == 'ce':
             loss = nn.CrossEntropyLoss()
-            loss_output = loss(pred, y_batch).item()
+            
         elif loss_fn == 'dice':
-            loss_output = dice_loss(pred, y_batch, num_classes, ignore_idx).item()
+            loss = DiceLoss(num_classes, ignore_idx)
+        
+        loss_output = loss(pred, y_batch).item()
         
         copied_pred = pred.data.cpu().numpy() 
         copied_y_batch = y_batch.data.cpu().numpy() 

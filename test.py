@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import PIL.Image as Image
 from evaluate import accuracy_per_pixel, miou
 from utils.utils import mask_labeling
-from utils.dice_loss import dice_loss
+from utils.dice_loss import DiceLoss, dice_loss
 from dataloader import CustomImageDataset
 from models.model import Unet
 from models.pretrained_model import ResNetUnet
@@ -71,14 +71,14 @@ def test(opt):
             # cross entropy loss
             if ignore_idx is not None:
                 loss = nn.CrossEntropyLoss()
-            else: loss = nn.CrossEntropyLoss()
-            
-            loss_output = loss(pred, y).item()
+            else: 
+                loss = nn.CrossEntropyLoss()
         
         elif loss_fn == 'dice':
             # dice loss
-            loss_output = dice_loss(pred, y, num_classes, ignore_idx).item()
-
+            loss = DiceLoss(num_classes, ignore_idx)
+        
+        loss_output = loss(pred, y).item()
         
         if iter % 3 == 0:
             if save_imgs:
@@ -128,7 +128,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_path', type=str, default='../cropweed/CWFID', help='dataset directory path')
     parser.add_argument('--save_path', type=str, default='./test', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
-    parser.add_argument('--load_model',default='./diceloss-checkpoint/CWFID-Unet-50-215/best.pt', type=str, help='the name of saved model file (.pt)')
+    parser.add_argument('--load_model',default='./diceloss-checkpoint/CWFID-Unet-50-215/50ep_2b_final.pt', type=str, help='the name of saved model file (.pt)')
     parser.add_argument('--save_txt', type=bool, default=True, help='if it''s true, the result of trainig will be saved as txt file.')
     parser.add_argument('--save_imgs', type=bool, default=True, help='if it''s true, the predict images will saved at image dir')
     

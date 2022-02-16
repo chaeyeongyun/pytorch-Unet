@@ -65,3 +65,20 @@ def mask_labeling(y_batch, num_classes):
     y_batch = torch.from_numpy(y_batch)
     
     return y_batch
+
+def label_to_onehot(y_batch:torch.Tensor, num_classes, ignore_idx=None):
+    concat_list = []
+    for c in range(num_classes):
+        if c==ignore_idx:
+            continue
+        concat_list += [np.expand_dims(np.where(y_batch==c, 1, 0), axis=1)]
+    onehot = np.concatenate(concat_list, axis=1)
+    # return Tensor
+    onehot = torch.from_numpy(onehot)
+    return onehot
+
+if __name__ == '__main__':
+    y_batch = torch.from_numpy(np.array([[[0, 1, 2], [0, 1, 2], [0, 1, 2]], [[2, 1, 0],[2, 1, 0],[2, 1, 0]]]))
+    onehot = label_to_onehot(y_batch, 3)
+    print(onehot)
+    

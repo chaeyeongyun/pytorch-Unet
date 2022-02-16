@@ -9,7 +9,7 @@ from models.model import Unet
 from models.pretrained_model import ResNetUnet
 from dataloader import CustomImageDataset
 from utils.utils import mask_labeling
-from utils.dice_loss import dice_loss
+from utils.dice_loss import DiceLoss
 from evaluate import accuracy_per_pixel, evaluate, miou
 import numpy as np
 import torch
@@ -94,7 +94,7 @@ def train(opt, model):
             iter +=1
             msg = '\riteration  %d / %d'%(iter, trainloader_length)
             print(' '*len(msg), end='')
-            print(msg, end='')
+            print(msg, end='')# %%
             time.sleep(0.1)
             
             x_batch = x_batch.to(device, dtype=torch.float32)
@@ -112,15 +112,15 @@ def train(opt, model):
             if loss_fn == 'ce':
                 # cross entropy loss
                 if ignore_idx is not None:
-                    loss = nn.CrossEntropyLoss()
+                    loss = nn.CrossEntropyLoss(ignore_idx=ignore_idx)
+                
                 else: loss = nn.CrossEntropyLoss()
                 
-                loss_output = loss(pred, y_batch)
-            
             elif loss_fn == 'dice':
                 # dice loss
-                loss_output = dice_loss(pred, y_batch, num_classes, ignore_idx)
-            
+                loss = DiceLoss(num_classes, ignore_idx)
+                
+            loss_output = loss(pred, y_batch)  
             loss_output.backward()
             
             # update parameters
@@ -218,8 +218,11 @@ if __name__ == '__main__':
     #      print("---------!!!training interrupt!!!---------")
     #      if opt.save_checkpoint and model is not None:
     #          torch.save(model.state_dict(), os.path.join(opt.save_model_path, f'interrupt.pt'))
-    model = None
-    train(opt, model)
+    # model = None
+    # train(opt, model)
+    datasets = '../blured_cropweed_strong'
+    for dataset in os.listdir(datasets):
+        opt.dataset_path = os.path.join(datasets, dataset)
+        model=None
+        train(opt, model)
 
-
-# %%
