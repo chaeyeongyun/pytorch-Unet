@@ -10,6 +10,7 @@ from models.pretrained_model import ResNetUnet
 from dataloader import CustomImageDataset
 from utils.utils import mask_labeling
 from utils.dice_loss import DiceLoss
+from utils.focal_loss import FocalLoss
 from evaluate import accuracy_per_pixel, evaluate, miou
 import numpy as np
 import torch
@@ -71,6 +72,7 @@ def train(opt, model):
         f = open(os.path.join(save_model_path, 'result.txt'),'w')
         # file = open(os.path.join(save_model_path,'train information.txt'), 'w')
         information = "dataset path : %s \npretrain %s, batch size %d, loss: %s, num_epochs %d, init_lr %.8f, input size %d, device  %s\n" % (dataset_path, pretrained, batch_size, loss_fn, num_epochs, lr, input_size, device)
+        print(information)
         f.write(information)
         # file.close()
     
@@ -119,6 +121,9 @@ def train(opt, model):
             elif loss_fn == 'dice':
                 # dice loss
                 loss = DiceLoss(num_classes, ignore_idx)
+            
+            elif loss_fn == 'focal':
+                loss = FocalLoss(num_classes)
                 
             loss_output = loss(pred, y_batch)  
             loss_output.backward()
@@ -127,7 +132,7 @@ def train(opt, model):
             optimizer.step()
             
             if iter == len(trainloader):
-                color_map = np.array([[0,0,0],[0,0,255],[255, 0, 0]], np.uint8)
+                color_map = np.array([[0,0,0],[0,0,255],[255, 0, 0]], np.uint8) # (black, blue, red)
                 temp_pred = pred.data.cpu().numpy() # (N, C, H, W)
                 temp_pred = np.swapaxes(temp_pred, 1, 3) # (N, H, W, C)
                 temp_pred = np.argmax(temp_pred, -1) # (N, H, W)
@@ -199,7 +204,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
-    parser.add_argument('--loss_fn', type=str, default='dice', help='loss function. ce / dice ')
+    parser.add_argument('--loss_fn', type=str, default='focal', help='loss function. ce / dice /focal ')
     parser.add_argument('--ignore_idx', type=int, default=None, help='ignore index i.e. background class')
     parser.add_argument('--dataset_path', type=str, default='../cropweed/rice_s_n_w', help='dataset directory path')
     parser.add_argument('--input_size', type=int, default=512, help='input image size')
@@ -220,7 +225,7 @@ if __name__ == '__main__':
     #          torch.save(model.state_dict(), os.path.join(opt.save_model_path, f'interrupt.pt'))
     # model = None
     # train(opt, model)
-    datasets = '../blured_cropweed_strong'
+    datasets = '../cropweed'
     for dataset in os.listdir(datasets):
         opt.dataset_path = os.path.join(datasets, dataset)
         model=None

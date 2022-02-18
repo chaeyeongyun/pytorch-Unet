@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from utils.dice_loss import DiceLoss
+from utils.focal_loss import FocalLoss
 
 def bincount_fn(cats, num_classes):
     '''
@@ -113,6 +114,9 @@ def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
             
         elif loss_fn == 'dice':
             loss = DiceLoss(num_classes, ignore_idx)
+        
+        elif loss_fn == 'focal':
+            loss = FocalLoss(num_classes)
         
         loss_output = loss(pred, y_batch).item()
         

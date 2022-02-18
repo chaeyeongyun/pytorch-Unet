@@ -8,11 +8,13 @@ import matplotlib.pyplot as plt
 import PIL.Image as Image
 from evaluate import accuracy_per_pixel, miou
 from utils.utils import mask_labeling
-from utils.dice_loss import DiceLoss, dice_loss
+from utils.dice_loss import DiceLoss
+from utils.focal_loss import FocalLoss
 from dataloader import CustomImageDataset
 from models.model import Unet
 from models.pretrained_model import ResNetUnet
 from torch.utils.data import DataLoader
+import glob
 
 def test(opt):
     pretrained, num_classes, ignore_idx, save_path, dataset_path, input_size, load_model, save_txt, save_imgs =\
@@ -21,7 +23,7 @@ def test(opt):
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     test_data = CustomImageDataset(os.path.join(dataset_path, 'test_images'), os.path.join(dataset_path, 'test_masks'), resize=input_size, pretrained=pretrained)
-    testloader = DataLoader(test_data, batch_size=1)
+    testloader = DataLoader(test_data, batch_size=1, shuffle=False)
     
     if pretrained:
         print('ResnetUnet')
@@ -78,6 +80,10 @@ def test(opt):
             # dice loss
             loss = DiceLoss(num_classes, ignore_idx)
         
+        elif loss_fn == 'focal':
+            # focal loss
+            loss = FocalLoss(num_classes)
+        
         loss_output = loss(pred, y).item()
         
         if iter % 3 == 0:
@@ -92,7 +98,13 @@ def test(opt):
                 org_mask = np.concatenate([org_mask]*3, axis=2) # (W, H, 3)
                 org_mask = Image.fromarray(org_mask, mode="RGB")
                 org_mask = np.array(org_mask)
-                plt.imsave(os.path.join(img_dir, '{}'.format(img_name)), np.concatenate((org_mask, show_predict[0]), 1))
+                if not pretrained:
+                    org_img = x.data.cpu().numpy()[0][:, 4:4+input_size, 4:4+input_size] * 255 # (3, H, W)
+                else:
+                    org_img = x.data.cpu().numpy()[0][:, 2:2+input_size, 2:2+input_size] * 255 # (3, H, W)
+                org_img = np.swapaxes(org_img, 0, 2)
+                org_img = np.uint8(org_img)
+                plt.imsave(os.path.join(img_dir, '{}'.format(img_name)), np.concatenate(( org_img , org_mask, show_predict[0]), 1))
             
         copied_pred = pred.data.cpu().numpy() 
         copied_y_batch = y.data.cpu().numpy() 
@@ -123,7 +135,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pretrained', type=bool, default=False, help='if it''s true, pretrained encoder model mode')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
-    parser.add_argument('--loss_fn', type=str, default='dice', help='loss function. ce / dice ')
+    parser.add_argument('--loss_fn', type=str, default='focal', help='loss function. ce / dice ')
     parser.add_argument('--ignore_idx', type=int, default=None, help='ignore index i.e. background class')
     parser.add_argument('--dataset_path', type=str, default='../cropweed/CWFID', help='dataset directory path')
     parser.add_argument('--save_path', type=str, default='./test', help='dataset directory path')
@@ -134,5 +146,31 @@ if __name__ == '__main__':
     
     
     opt = parser.parse_args()
+    # test(opt)
+
+    datasetdir = '../cropweed'
+    checkpointdir = './focal-checkpoint'
+    checkpoints = os.listdir(checkpointdir)
+    for dataset in os.listdir(datasetdir):
+        opt.dataset_path = os.path.join(datasetdir, dataset)
+        for checkpoint in checkpoints:
+            if checkpoint.split('-')[0]  == dataset:
+                checkpoint_path = os.path.join(checkpointdir, checkpoint)
+                weights = glob.glob(checkpoint_path+'/*.pt')
+                for weight in weights:
+                    opt.load_model = weight
+                    test(opt) 
     
-    test(opt)
+    blurdatasetdir = '../blured_cropweed_strong'
+    checkpoints = os.listdir(checkpointdir)
+    for dataset in os.listdir(blurdatasetdir):
+        opt.dataset_path = os.path.join(blurdatasetdir, dataset)
+        for checkpoint in checkpoints:
+            if checkpoint.split('-')[0] + '_b' == dataset:
+                checkpoint_path = os.path.join(checkpointdir, checkpoint)
+                weights = glob.glob(checkpoint_path+'/*.pt')
+                for weight in weights:
+                    opt.load_model = weight
+                    test(opt)    
+   
+                    

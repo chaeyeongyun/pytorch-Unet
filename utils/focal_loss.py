@@ -8,7 +8,7 @@ from .utils import label_to_onehot
 def focal_loss(pred:Tensor, target:Tensor, alpha, gamma, num_classes, ignore_idx=None, reduction="sum"):
     assert pred.shape[0] == target.shape[0],\
         "pred tensor and target tensor must have same batch size"
-    
+           
     if num_classes == 1:
         pred = F.sigmoid(pred)
     
@@ -16,6 +16,7 @@ def focal_loss(pred:Tensor, target:Tensor, alpha, gamma, num_classes, ignore_idx
         pred = F.softmax(pred, dim=1).float()
 
     onehot = label_to_onehot(target, num_classes, ignore_idx)
+    onehot = onehot.to(pred.device)
     focal_loss = 0
 
     focal = torch.pow((1-pred), gamma) # (B, C, H, W)
@@ -39,7 +40,7 @@ def focal_loss(pred:Tensor, target:Tensor, alpha, gamma, num_classes, ignore_idx
     
 
 class FocalLoss(nn.Module):
-    def __init__(self, num_classes, alpha, gamma, ignore_idx=None, reduction='sum'):
+    def __init__(self, num_classes, alpha=0.25, gamma=2, ignore_idx=None, reduction='mean'):
         super().__init__()
         self.num_classes = num_classes
         self.ignore_idx = ignore_idx
@@ -48,6 +49,7 @@ class FocalLoss(nn.Module):
         self.reduction = reduction
     
     def forward(self, pred, target):
+        
         if self.num_classes == 1:
             pred = F.sigmoid(pred)
         else:
