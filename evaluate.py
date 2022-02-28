@@ -2,6 +2,7 @@ from utils.utils import mask_labeling
 import numpy as np
 import torch
 import torch.nn as nn
+from utils.utils import onehot_ndarray
 from utils.dice_loss import DiceLoss
 from utils.focal_loss import FocalLoss
 
@@ -66,6 +67,58 @@ def miou(pred, target, num_classes, ignore_idx=None):
     miou = sum(miou_per_image) / len(miou_per_image)
     return miou, iou_per_class
     
+def confusion_matrix(pred, target, num_classes, ignore_idx=None):
+    '''
+    make confusion matrix for miou_modified in train.py
+    
+    modified miou in CED-Net
+    https://www.mdpi.com/2079-9292/9/10/1602/htm
+    Args:
+        pred: (N, C, H, W), ndarray
+        target : (N, H, W), ndarray
+
+    Return:
+        miou(float), iou_per_class(ndarray)
+    '''
+    def catcount(cats):
+        catcount = np.zeros(3)
+        l = list(cats)
+        for i in range(3):
+            catcount[i] = l.count(i)
+        return catcount
+    
+    pred = pred.argmax(axis=1) # (N, H, W)
+    assert pred.shape[0] == target.shape[0], \
+        "pred and target's batch size (shape[0]) must have same value "
+    
+    batchsize = pred.shape[0]
+    pred = onehot_ndarray(pred, num_classes) # (N, C, H, W)
+    target = onehot_ndarray(target, num_classes) # (N, C, H, W)
+    
+    # reshape to (N, C, HxW)
+    pred_1d, target_1d = np.reshape(pred, (batchsize, pred.shape[1], pred.shape[2]*pred.shape[3])), \
+        np.reshape(target, (batchsize, target.shape[1], target.shape[2]*target.shape[3]))
+    # reshape to (C, NxHxW)
+    pred_1d = np.reshape(np.swapaxes(pred_1d, 0, 1), (num_classes, batchsize*pred_1d.shape[-1]))
+    target_1d = np.reshape(np.swapaxes(target_1d, 0, 1), (num_classes, batchsize*target_1d.shape[-1]))
+    
+    cats = pred_1d + target_1d # 2: TP, 1: FN or FP, 0:TN ( iou = TP/(TP+FN+FP) )
+    
+    # confusion matrixes per class
+    # conf_mats = np.zeros((num_classes,3), dtype=np.int64)
+    conf_mats = []
+    for i in range(num_classes):
+        cat = cats[i, :]
+        cat_bincount = np.bincount(cat) if np.bincount(cat).shape[0] == 3 else catcount(cat) # [TP, FN+FP, TN]
+        conf_mats += [cat_bincount]
+    
+    return np.array(conf_mats)
+        
+                
+        
+        
+        
+    
 
 def accuracy_per_pixel(pred, target, ignore_idx=None):
     '''
@@ -99,6 +152,7 @@ def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
     val_loss = 0
     val_miou = 0
     iou_per_class = np.array([0]*num_classes, dtype=np.float64)
+    conf_sum = np.zeros((num_classes, 3))
     
     iter = 0
     for x_batch, y_batch in valloader:
@@ -124,26 +178,34 @@ def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
         copied_y_batch = y_batch.data.cpu().numpy() 
         accuracy_px = accuracy_per_pixel(copied_pred, copied_y_batch, ignore_idx)
         miou_per_batch, iou_ndarray = miou(copied_pred, copied_y_batch, num_classes, ignore_idx) 
+        # modified iou
+        conf = confusion_matrix(copied_pred, copied_y_batch, num_classes, ignore_idx)
+        
         # val loss / val accuracy
         val_acc_pixel += accuracy_px
         val_loss += loss_output
         val_miou += miou_per_batch
         iou_per_class += iou_ndarray
+        conf_sum += conf
         
     
     val_acc_pixel = val_acc_pixel/ len(valloader)
     val_loss = val_loss / len(valloader)
     val_miou = val_miou / len(valloader)
     val_ious = np.round((iou_per_class / len(valloader)), 5).tolist()
+    ## modified iou
+    val_m_ious = conf_sum[:, 0] / (conf_sum[:, 1]+conf_sum[:, 0])
+    val_m_miou = np.mean(val_m_ious)
 
-    return val_loss, val_acc_pixel, val_miou, val_ious
+    return val_loss, val_acc_pixel, val_miou, val_ious, val_m_miou, val_m_ious
         
 if __name__ == '__main__':
     np.random.seed(0)
     pred = np.random.randint(low=0, high=3, size=(2, 3, 24, 24))
     gt = np.random.randint(low=0, high=3, size=(2, 24, 24))
-    miou, iou_list = miou(pred, gt, 3, None)
-    print(miou, iou_list)
+    confmats =  confusion_matrix(pred, gt, 3)
+    print(confmats)
+    # print(miou, iou_list)
     # gt = np.random.randint(low=0, high=3, size=(2, 24, 24))
     # miou = miou(pred, gt, 3, None)
     # accuracy_per_pixel(pred, gt, None)

@@ -1,2 +1,0 @@
-load model(.pt) : ./checkpoint/pretrained/25ep_2b_final.pt 
- loss: 0.04828188, Testaccuracy: 0.98379067, Test miou: 0.71426061

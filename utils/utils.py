@@ -76,6 +76,14 @@ def label_to_onehot(y_batch:torch.Tensor, num_classes, ignore_idx=None):
     
     return onehot
 
+def onehot_ndarray(label_array:np.ndarray, num_classes, ignore_idx=None):
+    onehot = np.zeros((label_array.shape[0], num_classes, label_array.shape[1], label_array.shape[2]), dtype=np.int64)
+    for c in range(num_classes):
+        if c==ignore_idx:
+            continue
+        onehot[:, c, :, :] += (label_array==c)
+    return onehot
+
 if __name__ == '__main__':
     y_batch = torch.from_numpy(np.array([[[0, 1, 2], [0, 1, 2], [0, 1, 2]], [[2, 1, 0],[2, 1, 0],[2, 1, 0]]]))
     onehot = label_to_onehot(y_batch, 3)

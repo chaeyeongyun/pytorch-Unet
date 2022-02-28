@@ -11,7 +11,7 @@ from dataloader import CustomImageDataset
 from utils.utils import mask_labeling
 from utils.dice_loss import DiceLoss
 from utils.focal_loss import FocalLoss
-from evaluate import accuracy_per_pixel, evaluate, miou
+from evaluate import accuracy_per_pixel, evaluate, miou, confusion_matrix
 import numpy as np
 import torch
 import torch.nn as nn
@@ -58,8 +58,8 @@ def train(opt, model):
 
     trainloader_length = len(trainloader)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0001, amsgrad=False)
-    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
-    
+    # lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
+        
     dt = datetime.datetime.now()
     save_model_path = os.path.join(checkpoint_dir, f"{dataset_path.split('/')[-1]}-{model.__class__.__name__}-{num_epochs}-{dt.month}{dt.day}")
     if save_checkpoint:
@@ -81,6 +81,7 @@ def train(opt, model):
         os.makedirs(img_dir)
         
     best_val_miou = 0
+    conf_sum = np.zeros((num_classes, 3))
     start = time.time()
     # start training
     for epoch in range(start_epoch, num_epochs):
@@ -148,22 +149,28 @@ def train(opt, model):
             copied_y_batch = y_batch.data.cpu().numpy() 
             accuracy_px = accuracy_per_pixel(copied_pred, copied_y_batch, ignore_idx)
             miou_per_batch, iou_ndarray = miou(copied_pred, copied_y_batch, num_classes, ignore_idx)
+            conf = confusion_matrix(copied_pred, copied_y_batch, num_classes, ignore_idx)
             
             # train loss / train accuracy
             train_acc_pixel += accuracy_px
             train_loss += loss_output.item()
             train_miou += miou_per_batch
             iou_per_class += iou_ndarray
+            conf_sum += conf
             
         # evaluate after 1 epoch training
-        val_loss, val_acc_pixel, val_miou, val_ious = evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx)
+        val_loss, val_acc_pixel, val_miou, val_ious, val_m_miou, val_m_ious =\
+            evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx)
         torch.cuda.empty_cache()
                 
         train_acc_pixel = train_acc_pixel / trainloader_length
         train_loss = train_loss / trainloader_length
         train_miou = train_miou / trainloader_length
         train_ious = (np.round(iou_per_class / trainloader_length, 5)).tolist()
-        
+        ## modified ious
+        train_m_ious = conf_sum[:, 0] / (conf_sum[:, 1]+conf_sum[:, 0])
+        train_m_miou = np.mean(train_m_ious)
+               
         if save_checkpoint:
             writer.add_scalars('Loss', {'trainloss':train_loss, 'valloss':val_loss}, epoch)
             writer.add_scalars('Accuracy', {'trainacc':train_acc_pixel, 'valacc':val_acc_pixel}, epoch)
@@ -172,12 +179,13 @@ def train(opt, model):
                 torch.save(model.state_dict(), os.path.join(save_model_path, f'best.pt'))
                 best_val_miou = val_miou
         
-        lr_scheduler.step(val_loss)
+        # lr_scheduler.step(val_loss)
         
         
         #  Metrics calculation
         result_txt = "\nEpoch: %d, loss: %.8f, Train accuracy: %.8f, Train miou: %.8f, Val accuracy: %.8f, Val miou: %.8f, Val loss: %.8f, lr: %5f" % (epoch+1, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss, optimizer.param_groups[0]['lr'])
         result_txt += f"\n train iou per class = {train_ious}, val iou per class = {val_ious}"
+        result_txt += f"\n modified train miou = {train_m_miou[0]}, val iou per class = {val_m_miou[0]}"
         if save_txt:
             f.write(result_txt)
         print(result_txt)
@@ -225,8 +233,10 @@ if __name__ == '__main__':
     #          torch.save(model.state_dict(), os.path.join(opt.save_model_path, f'interrupt.pt'))
     # model = None
     # train(opt, model)
-    datasets = '../cropweed'
+    # datasets = '../cropweed'
+    datasets = '../blured_cropweed_strong'
     for dataset in os.listdir(datasets):
+        if 'IJRR' in dataset : continue
         opt.dataset_path = os.path.join(datasets, dataset)
         model=None
         train(opt, model)
