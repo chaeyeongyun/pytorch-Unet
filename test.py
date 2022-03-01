@@ -128,7 +128,7 @@ def test(opt):
     test_miou = test_miou / len(testloader)
     test_ious = np.round((iou_per_class / len(testloader)), 5).tolist()
     ## modified iou
-    test_m_ious = conf_sum[:, 0] / (conf_sum[:, 1]+conf_sum[:, 0])
+    test_m_ious = conf_sum[:, 2] / (conf_sum[:, 1]+conf_sum[:, 2])
     test_m_miou = np.mean(test_m_ious)
         
     result_txt = "load model(.pt) : %s \n loss: %.8f, Testaccuracy: %.8f, Test miou: %.8f" % (load_model, test_loss, test_acc_pixel, test_miou)       

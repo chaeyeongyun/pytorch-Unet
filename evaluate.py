@@ -196,7 +196,7 @@ def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
     val_miou = val_miou / len(valloader)
     val_ious = np.round((iou_per_class / len(valloader)), 5).tolist()
     ## modified iou
-    val_m_ious = conf_sum[:, 0] / (conf_sum[:, 1]+conf_sum[:, 0])
+    val_m_ious = conf_sum[:, 2] / (conf_sum[:, 1]+conf_sum[:, 2])
     val_m_miou = np.mean(val_m_ious)
 
     return val_loss, val_acc_pixel, val_miou, val_ious, val_m_miou, val_m_ious

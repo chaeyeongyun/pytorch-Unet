@@ -168,7 +168,7 @@ def train(opt, model):
         train_miou = train_miou / trainloader_length
         train_ious = (np.round(iou_per_class / trainloader_length, 5)).tolist()
         ## modified ious
-        train_m_ious = conf_sum[:, 0] / (conf_sum[:, 1]+conf_sum[:, 0])
+        train_m_ious = conf_sum[:, 2] / (conf_sum[:, 1]+conf_sum[:, 2])
         train_m_miou = np.mean(train_m_ious)
                
         if save_checkpoint:
