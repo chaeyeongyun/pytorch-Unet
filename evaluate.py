@@ -80,7 +80,7 @@ def confusion_matrix(pred, target, num_classes, ignore_idx=None):
         target : (N, H, W), ndarray
 
     Return:
-        conf_mats : (num_classes, 3), ndarray, conf_mats[class] : (3, ) -> [TP, FN+FP, TN]
+        conf_mats : (num_classes, 3), ndarray, conf_mats[class] : (3, ) -> [TN, FN+FP, TP]
     '''
     def catcount(cats):
         catcount = np.zeros(3)
@@ -203,8 +203,9 @@ def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
         
 if __name__ == '__main__':
     np.random.seed(0)
-    pred = np.random.randint(low=0, high=3, size=(2, 3, 24, 24))
-    gt = np.random.randint(low=0, high=3, size=(2, 24, 24))
+    pred = np.random.randint(low=0, high=3, size=(2, 3, 2, 2))
+    gt = np.random.randint(low=0, high=3, size=(2, 2, 2))
+     
     confmats =  confusion_matrix(pred, gt, 3)
     print(confmats)
     # print(miou, iou_list)
