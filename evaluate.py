@@ -67,6 +67,8 @@ def miou(pred, target, num_classes, ignore_idx=None):
     miou = sum(miou_per_image) / len(miou_per_image)
     return miou, iou_per_class
     
+    
+    
 def confusion_matrix(pred, target, num_classes, ignore_idx=None):
     '''
     make confusion matrix for miou_modified in train.py
@@ -78,7 +80,7 @@ def confusion_matrix(pred, target, num_classes, ignore_idx=None):
         target : (N, H, W), ndarray
 
     Return:
-        miou(float), iou_per_class(ndarray)
+        conf_mats : (num_classes, 3), ndarray, conf_mats[class] : (3, ) -> [TP, FN+FP, TN]
     '''
     def catcount(cats):
         catcount = np.zeros(3)
@@ -112,7 +114,7 @@ def confusion_matrix(pred, target, num_classes, ignore_idx=None):
         cat_bincount = np.bincount(cat) if np.bincount(cat).shape[0] == 3 else catcount(cat) # [TP, FN+FP, TN]
         conf_mats += [cat_bincount]
     
-    return np.array(conf_mats)
+    return np.array(conf_mats) 
         
                 
         
