@@ -133,7 +133,7 @@ def test(opt):
         
     result_txt = "load model(.pt) : %s \n loss: %.8f, Testaccuracy: %.8f, Test miou: %.8f" % (load_model, test_loss, test_acc_pixel, test_miou)       
     result_txt += f"\niou per class {test_ious}"
-    result_txt += f"\nmodified iou {test_m_ious}, modified miou{test_m_miou[0]}"
+    result_txt += f"\nmodified iou {test_m_ious}, modified miou{test_m_miou}"
     if save_txt:
         f.write(result_txt)
         f.close()
@@ -175,7 +175,8 @@ if __name__ == '__main__':
     for dataset in os.listdir(blurdatasetdir):
         opt.dataset_path = os.path.join(blurdatasetdir, dataset)
         for checkpoint in checkpoints:
-            if checkpoint.split('-')[0] + '_b' == dataset:
+            # if checkpoint.split('-')[0] + '_b' == dataset:
+            if checkpoint.split('-')[0] == dataset:
                 checkpoint_path = os.path.join(checkpointdir, checkpoint)
                 weights = glob.glob(checkpoint_path+'/*.pt')
                 for weight in weights:

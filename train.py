@@ -185,7 +185,7 @@ def train(opt, model):
         #  Metrics calculation
         result_txt = "\nEpoch: %d, loss: %.8f, Train accuracy: %.8f, Train miou: %.8f, Val accuracy: %.8f, Val miou: %.8f, Val loss: %.8f, lr: %5f" % (epoch+1, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss, optimizer.param_groups[0]['lr'])
         result_txt += f"\n train iou per class = {train_ious}, val iou per class = {val_ious}"
-        result_txt += f"\n modified train miou = {train_m_miou[0]}, val iou per class = {val_m_miou[0]}"
+        result_txt += f"\n modified train miou = {train_m_miou}, val iou per class = {val_m_miou}"
         if save_txt:
             f.write(result_txt)
         print(result_txt)
