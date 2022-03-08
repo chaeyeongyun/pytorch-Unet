@@ -83,9 +83,9 @@ def confusion_matrix(pred, target, num_classes, ignore_idx=None):
         conf_mats : (num_classes, 3), ndarray, conf_mats[class] : (3, ) -> [TN, FN+FP, TP]
     '''
     def catcount(cats):
-        catcount = np.zeros(3)
+        catcount = np.zeros(4)
         l = list(cats)
-        for i in range(3):
+        for i in range(4):
             catcount[i] = l.count(i)
         return catcount
     
@@ -104,24 +104,43 @@ def confusion_matrix(pred, target, num_classes, ignore_idx=None):
     pred_1d = np.reshape(np.swapaxes(pred_1d, 0, 1), (num_classes, batchsize*pred_1d.shape[-1]))
     target_1d = np.reshape(np.swapaxes(target_1d, 0, 1), (num_classes, batchsize*target_1d.shape[-1]))
     
-    cats = pred_1d + target_1d # 2: TP, 1: FN or FP, 0:TN ( iou = TP/(TP+FN+FP) )
-    
+    cats = (pred_1d + target_1d)+1 # 3: TP, 2: FN and FP, 1:TN ( iou = TP/(TP+FN+FP) )
+    cats = np.where((cats==2.0)&(target_1d==1.0), 0, cats) # 3:TP, 2:FP,  1:TN, 0:FN
     # confusion matrixes per class
     # conf_mats = np.zeros((num_classes,3), dtype=np.int64)
     conf_mats = []
     for i in range(num_classes):
         cat = cats[i, :]
-        cat_bincount = np.bincount(cat) if np.bincount(cat).shape[0] == 3 else catcount(cat) # [TP, FN+FP, TN]
+        cat_bincount = np.bincount(cat) if np.bincount(cat).shape[0] == 4 else catcount(cat) # [FN, TN, FP, TP]
         conf_mats += [cat_bincount]
     
     return np.array(conf_mats) 
         
-                
+def conf_to_miou(conf_sum):
+    '''
+    convert confusion matrix to CED-Net miou
+    '''
+    m_ious = conf_sum[:, 3] / (conf_sum[:, 0]+conf_sum[:, 2]+conf_sum[:, 3]) # [class 0 iou, class 1 iou, class 2 iou, ...]
+    m_miou = np.sum(conf_sum[1:, :], axis=0) # calculate except background ( class 0 )
+    m_miou = m_miou[3] / (m_miou[0] + m_miou[2] + m_miou[3])
+    return m_ious, m_miou    
         
-        
-        
+def f1_score(conf_sum, ignore_idx=None):
+    '''
+    F1 score has a high value when the recall and precision are not biased to either side.
+    F1 score = 2 / (1/recall + 1/precision) = 2 x (recall x precision) / (recall + precision)
     
-
+    Args:
+        conf_sum : ndarray, (num_classes, 4) - sum of confusion matrix per epoch, 4:[FN, TN, FP, TP]
+    Returns:
+        f1_score : F1 score(int)
+    '''
+    sum = np.sum(conf_sum[1:, :], axis=0)
+    precision = sum[3] / (sum[2]+sum[3]) # TP/(FP+TP) : The actual P ratio among the total predicted P.
+    recall = sum[3] / (sum[3]+sum[0])# TP/(TP+FN) : The ratio predicted by P among actual P.
+    f1_score = 2 * (recall * precision) / (recall + precision)
+    return f1_score
+    
 def accuracy_per_pixel(pred, target, ignore_idx=None):
     '''
     Args:
@@ -148,13 +167,17 @@ def accuracy_per_pixel(pred, target, ignore_idx=None):
     acc = sum(accuracy_per_image) / len(accuracy_per_image)
     return acc
 
+
+    
+
+
 def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
     model.eval()
     val_acc_pixel = 0
     val_loss = 0
     val_miou = 0
     iou_per_class = np.array([0]*num_classes, dtype=np.float64)
-    conf_sum = np.zeros((num_classes, 3))
+    conf_sum = np.zeros((num_classes, 4))
     
     iter = 0
     for x_batch, y_batch in valloader:
@@ -196,9 +219,8 @@ def evaluate(model, valloader, device, num_classes, loss_fn, ignore_idx=None):
     val_miou = val_miou / len(valloader)
     val_ious = np.round((iou_per_class / len(valloader)), 5).tolist()
     ## modified iou
-    val_m_ious = conf_sum[:, 2] / (conf_sum[:, 1]+conf_sum[:, 2])
-    val_m_miou = np.mean(val_m_ious)
-
+    val_m_ious, val_m_miou = conf_to_miou(conf_sum)
+    
     return val_loss, val_acc_pixel, val_miou, val_ious, val_m_miou, val_m_ious
         
 if __name__ == '__main__':

@@ -11,7 +11,7 @@ from dataloader import CustomImageDataset
 from utils.utils import mask_labeling
 from utils.dice_loss import DiceLoss
 from utils.focal_loss import FocalLoss
-from evaluate import accuracy_per_pixel, evaluate, miou, confusion_matrix
+from evaluate import accuracy_per_pixel, evaluate, miou, confusion_matrix, conf_to_miou
 import numpy as np
 import torch
 import torch.nn as nn
@@ -58,7 +58,8 @@ def train(opt, model):
 
     trainloader_length = len(trainloader)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0001, amsgrad=False)
-    # lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
+    if opt.lr_scheduler:
+        lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
         
     dt = datetime.datetime.now()
     save_model_path = os.path.join(checkpoint_dir, f"{dataset_path.split('/')[-1]}-{model.__class__.__name__}-{num_epochs}-{dt.month}{dt.day}")
@@ -79,9 +80,10 @@ def train(opt, model):
     if save_imgs:
         img_dir = os.path.join(save_model_path, 'imgs')
         os.makedirs(img_dir)
-        
+    
+    best_val_m_miou = 0
     best_val_miou = 0
-    conf_sum = np.zeros((num_classes, 3))
+    conf_sum = np.zeros((num_classes, 4))
     start = time.time()
     # start training
     for epoch in range(start_epoch, num_epochs):
@@ -168,8 +170,7 @@ def train(opt, model):
         train_miou = train_miou / trainloader_length
         train_ious = (np.round(iou_per_class / trainloader_length, 5)).tolist()
         ## modified ious
-        train_m_ious = conf_sum[:, 2] / (conf_sum[:, 1]+conf_sum[:, 2])
-        train_m_miou = np.mean(train_m_ious)
+        train_m_ious, train_m_miou = conf_to_miou(conf_sum)
                
         if save_checkpoint:
             writer.add_scalars('Loss', {'trainloss':train_loss, 'valloss':val_loss}, epoch)
@@ -178,14 +179,18 @@ def train(opt, model):
             if val_miou > best_val_miou:
                 torch.save(model.state_dict(), os.path.join(save_model_path, f'best.pt'))
                 best_val_miou = val_miou
-        
-        # lr_scheduler.step(val_loss)
+            if val_m_miou > best_val_m_miou:
+                torch.save(model.state_dict(), os.path.join(save_model_path, f'best_m_miou.pt'))
+                best_val_m_miou = val_m_miou
+                
+        if opt.lr_scheduler:
+            lr_scheduler.step(val_loss)
         
         
         #  Metrics calculation
         result_txt = "\nEpoch: %d, loss: %.8f, Train accuracy: %.8f, Train miou: %.8f, Val accuracy: %.8f, Val miou: %.8f, Val loss: %.8f, lr: %5f" % (epoch+1, train_loss, train_acc_pixel, train_miou, val_acc_pixel, val_miou, val_loss, optimizer.param_groups[0]['lr'])
         result_txt += f"\n train iou per class = {train_ious}, val iou per class = {val_ious}"
-        result_txt += f"\n modified train miou = {train_m_miou}, val iou per class = {val_m_miou}"
+        result_txt += f"\n modified train miou = {train_m_miou}, modified val miou = {val_m_miou}"
         if save_txt:
             f.write(result_txt)
         print(result_txt)
@@ -211,7 +216,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs', type=int, default=50, help='the number of epochs')
     parser.add_argument('--num_classes', type=int, default=3, help='the number of classes')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size')
-    parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
+    parser.add_argument('--init_lr', type=float, default=0.00001, help='initial learning rate')
+    parser.add_argument('--lr_scheduler', type=bool, default=True, help='initial learning rate')
     parser.add_argument('--loss_fn', type=str, default='focal', help='loss function. ce / dice /focal ')
     parser.add_argument('--ignore_idx', type=int, default=None, help='ignore index i.e. background class')
     parser.add_argument('--dataset_path', type=str, default='../cropweed/rice_s_n_w', help='dataset directory path')
@@ -233,11 +239,24 @@ if __name__ == '__main__':
     #          torch.save(model.state_dict(), os.path.join(opt.save_model_path, f'interrupt.pt'))
     # model = None
     # train(opt, model)
-    # datasets = '../cropweed'
+    
+    ##
+    ###
+    
     datasets = '../blured_cropweed_strong'
     for dataset in os.listdir(datasets):
-        if 'IJRR' in dataset : continue
+        # if 'IJRR' in dataset: continue
         opt.dataset_path = os.path.join(datasets, dataset)
+        opt.lr_scheduler = False
         model=None
         train(opt, model)
 
+    
+    datasets = '../cropweed'
+    for dataset in os.listdir(datasets):
+        opt.dataset_path = os.path.join(datasets, dataset)
+        # opt.lr_scheduler = True
+        model=None
+        train(opt, model)    
+        
+        
