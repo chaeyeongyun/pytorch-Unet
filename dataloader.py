@@ -14,8 +14,7 @@ class CustomImageDataset(Dataset):
         self.img_dir = img_dir
         self.resize=resize
         self.pretrained = pretrained
-        self.images = glob.glob(os.path.join(self.img_dir, '*.png'))
-        self.images = [img.split('/')[-1] for img in self.images]
+        self.images = os.listdir(img_dir)
         self.transform = transform
         self.target_transform = target_transform
 
